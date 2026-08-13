@@ -46,6 +46,7 @@ export default function GameCanvas() {
 
     void createGameScene(engine, canvas, {
       demo: isDemo,
+      step: "step1",
       onResult: (nextOutcome) => {
         setOutcome(nextOutcome);
         if (document.pointerLockElement === canvas) document.exitPointerLock();
@@ -85,7 +86,7 @@ export default function GameCanvas() {
   };
 
   return (
-    <main className="stormfall-shell">
+    <main className="stormfall-shell step1-mode">
       <canvas
         aria-label="Stormfall: Last Horizon の3Dゲーム画面"
         ref={canvasRef}
@@ -93,7 +94,7 @@ export default function GameCanvas() {
         style={{ touchAction: "none" }}
       />
 
-      <div id="hud" className="stormfall-hud" aria-live="polite">
+      <div id="hud" className="stormfall-hud step1-hud" aria-live="polite">
         <header className="hud-topbar">
           <div className="brand-lockup">
             <img src={LOGO_URL} alt="Stormfall emblem" />
@@ -103,12 +104,12 @@ export default function GameCanvas() {
             </div>
           </div>
           <div className="storm-readout">
-            <span className="eyebrow">STORM VECTOR</span>
-            <strong id="storm-timer">嵐を追跡中</strong>
+            <span className="eyebrow">EXPLORATION MODE</span>
+            <strong id="storm-timer">STEP 1 // EXPLORE</strong>
           </div>
           <div className="remaining-readout">
             <span className="eyebrow">SURVIVORS</span>
-            <strong><span id="remaining-count">5</span> REMAIN</strong>
+            <strong>FREE ROAM</strong>
           </div>
         </header>
 
@@ -144,7 +145,7 @@ export default function GameCanvas() {
         <div className="state-chip"><span>MOVE STATE</span><strong id="motion-state">IDLE</strong><i id="crouch-state">STAND</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>
         <ol id="event-feed" className="event-feed" aria-label="戦闘ログ" />
-        <p className="control-strip">WASD 移動 <b>·</b> SHIFT 走る <b>·</b> SPACE ジャンプ <b>·</b> C / CTRL しゃがむ <b>·</b> 右クリック 照準 <b>·</b> 左クリック 射撃 <b>·</b> R リロード</p>
+        <p className="control-strip">WASD 移動 <b>·</b> SHIFT ダッシュ <b>·</b> SPACE ジャンプ <b>·</b> C / CTRL しゃがみ <b>·</b> マウス Orbit</p>
       </div>
 
       {!started && (
@@ -154,8 +155,8 @@ export default function GameCanvas() {
             <p className="kicker">SOLO EXPEDITION // RIFT-07</p>
             <h1>嵐の外縁で、<em>次の一手</em>を奪え。</h1>
             <p className="launch-copy">浮遊群島に降下し、物資を確保せよ。電磁嵐が収束する前に、最後の生存者を決める。</p>
-            <button type="button" className="launch-button" onClick={beginMatch}>降下を開始 <span>↗</span></button>
-            <p className="launch-note">ソロ・サンドボックス — 4名の自律ライバルと対戦</p>
+            <button type="button" className="launch-button" onClick={beginMatch}>STEP 1を開始 <span>↗</span></button>
+            <p className="launch-note">STEP 1 — 3D探索基盤 / 戦闘システムは次の段階で追加</p>
           </div>
           <aside className="avatar-chooser" aria-label="降下アバター選択">
             <div className="chooser-heading"><span>DEPLOYMENT LOADOUT</span><strong>アバターを選択</strong></div>
@@ -167,7 +168,7 @@ export default function GameCanvas() {
                 </button>
               ))}
             </div>
-            <div className="rival-roster">
+            <div className="rival-roster step1-hidden">
               <div><span>THREAT ROSTER</span><b>現地ライバル</b></div>
               <ul>{RIVALS.map((rival) => <li key={rival.name}><img src={rival.image} alt="" /><span>{rival.name}</span></li>)}</ul>
             </div>

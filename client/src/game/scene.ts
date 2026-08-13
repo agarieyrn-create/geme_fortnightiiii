@@ -10,7 +10,7 @@ export type GameHandle = {
   dispose: () => void;
 };
 
-export type GameSceneOptions = Pick<WorldOptions, "demo" | "onResult">;
+export type GameSceneOptions = Pick<WorldOptions, "demo" | "step" | "onResult">;
 export type { MatchOutcome };
 
 export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement, options: GameSceneOptions): Promise<GameHandle> {

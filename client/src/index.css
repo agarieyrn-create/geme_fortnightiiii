@@ -78,3 +78,14 @@ button { font: inherit; }
 /* TPS telemetry placement — never cover the player silhouette or central sightline. */
 .state-chip { right: 24px; bottom: 122px; transform: none; }
 @media (max-width: 720px) { .state-chip { right: 14px; bottom: 116px; } }
+
+/* STEP 1 exploration mode: combat telemetry is intentionally withheld until the TPS foundation is validated. */
+.step1-hud .combat-panel, .step1-hud .signal-card, .step1-hud .event-feed, .step1-hud .hit-marker { display: none; }
+.step1-hud .storm-readout strong { color: #13d9c4; letter-spacing: .1em; }
+.step1-hud .remaining-readout strong { color: #dbe9e7; font-size: 13px; letter-spacing: .12em; }
+.step1-hud .vitals-panel { opacity: .78; }
+
+/* STEP 1 is a traversal prototype: enemy roster and combat affordances stay out of the flow. */
+.step1-mode .step1-hidden, .step1-mode .combat-panel, .step1-mode .signal-card, .step1-mode .event-feed, .step1-mode .hit-marker { display: none; }
+
+.step1-mode .vitals-panel { display: none; }

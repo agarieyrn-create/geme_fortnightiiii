@@ -48,7 +48,7 @@ const CHARACTER_RENDERS: Record<string, string> = {
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; onResult: (outcome: MatchOutcome) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "full"; onResult: (outcome: MatchOutcome) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -77,6 +77,8 @@ class Combatant {
   private readonly accentMaterial: StandardMaterial;
   private readonly cloakMaterial: StandardMaterial;
   private readonly limbs: Mesh[] = [];
+  private readonly collider: Mesh;
+  private colliderHeight = 2.4;
   private readonly animationController = new AnimationController();
   private motionState = "IDLE";
   private poseTime = 0;
@@ -103,6 +105,12 @@ class Combatant {
     this.bodyMaterial.diffuseColor = color;
     this.bodyMaterial.specularColor = new Color3(0.08, 0.08, 0.08);
     this.body.material = this.bodyMaterial;
+    this.collider = MeshBuilder.CreateCapsule(`${id}-capsule-collider`, { height: 2.4, radius: 0.38, tessellation: 8 }, scene);
+    this.collider.parent = this.root;
+    this.collider.position.y = 1.2;
+    this.collider.isVisible = false;
+    this.collider.checkCollisions = true;
+    this.root.metadata = { collider: "capsule", height: this.colliderHeight, radius: 0.38 };
     this.armorMaterial = new StandardMaterial(`${id}-armor-mat`, scene);
     this.armorMaterial.diffuseColor = enemy ? RUST : TEAL.scale(0.5);
     this.armorMaterial.specularColor = new Color3(0.16, 0.16, 0.16);
@@ -114,10 +122,11 @@ class Combatant {
     this.cloakMaterial.diffuseColor = color.scale(0.72);
     this.cloakMaterial.specularColor = Color3.Black();
 
-    const chest = MeshBuilder.CreateBox(`${id}-chest`, { width: 0.72, height: 0.5, depth: 0.4 }, scene);
+    const chest = MeshBuilder.CreateCapsule(`${id}-chest`, { height: 0.92, radius: 0.36, tessellation: 16 }, scene);
     chest.parent = this.root;
-    chest.position.y = 1.37;
-    chest.position.z = -0.28;
+    chest.position.y = 1.34;
+    chest.position.z = -0.2;
+    chest.scaling.set(1.08, 0.82, 0.78);
     chest.material = this.armorMaterial;
 
     const head = MeshBuilder.CreateSphere(`${id}-head`, { diameter: 0.53, segments: 14 }, scene);
@@ -142,8 +151,8 @@ class Combatant {
     this.addLimb("arm-r", 0.48, 1.43, -0.02, 0.18, this.bodyMaterial);
     this.addLimb("leg-l", -0.21, 0.48, 0.03, 0, this.bodyMaterial, 0.96);
     this.addLimb("leg-r", 0.21, 0.48, 0.03, 0, this.bodyMaterial, 0.96);
-    this.addArmorPart("boot-l", -0.21, 0.09, -0.08, 0.28, 0.2, 0.43, this.armorMaterial);
-    this.addArmorPart("boot-r", 0.21, 0.09, -0.08, 0.28, 0.2, 0.43, this.armorMaterial);
+    this.addFoot("boot-l", -0.21, 0.09, -0.08);
+    this.addFoot("boot-r", 0.21, 0.09, -0.08);
     this.addArmorPart("knee-l", -0.21, 0.53, -0.14, 0.23, 0.27, 0.13, this.armorMaterial);
     this.addArmorPart("knee-r", 0.21, 0.53, -0.14, 0.23, 0.27, 0.13, this.armorMaterial);
     this.addArmorPart("shoulder-l", -0.5, 1.71, -0.02, 0.4, 0.22, 0.5, this.armorMaterial);
@@ -257,6 +266,21 @@ class Combatant {
     this.motionState = state;
   }
 
+  setColliderHeight(height: number) {
+    this.colliderHeight = height;
+    this.collider.scaling.y = height / 2.4;
+    this.collider.position.y = height / 2;
+    this.root.metadata = { collider: "capsule", height, radius: 0.38 };
+  }
+
+  private addFoot(name: string, x: number, y: number, z: number) {
+    const foot = MeshBuilder.CreateCapsule(`${this.id}-${name}`, { height: 0.34, radius: 0.18, tessellation: 12 }, this.scene);
+    foot.parent = this.root;
+    foot.position.set(x, y, z);
+    foot.rotation.x = Math.PI / 2;
+    foot.material = this.armorMaterial;
+  }
+
   private addArmorPart(name: string, x: number, y: number, z: number, width: number, height: number, depth: number, material: StandardMaterial) {
     const part = MeshBuilder.CreateBox(`${this.id}-${name}`, { width, height, depth }, this.scene);
     part.parent = this.root;
@@ -330,8 +354,8 @@ export class GameWorld {
   private readonly weaponSystem: WeaponSystem;
   private readonly playerController: PlayerController;
   private readonly hudController = new HudController();
-  private readonly stormRing: Mesh;
-  private readonly stormCore: Mesh;
+  private readonly stormRing?: Mesh;
+  private readonly stormCore?: Mesh;
   private readonly terrainMaterial: StandardMaterial;
   private mode: "briefing" | "playing" | MatchOutcome = "briefing";
   private fireCooldown = 0;
@@ -374,12 +398,14 @@ export class GameWorld {
     this.input = new InputManager(canvas);
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout("kairo");
-    this.player.setPortrait("kairo");
+    if (options.step === "full") this.player.setPortrait("kairo");
     this.player.shield = 65;
-    this.createRivals();
-    this.createPickups();
-    this.stormRing = this.createStormRing();
-    this.stormCore = this.createStormCore();
+    if (options.step === "full") {
+      this.createRivals();
+      this.createPickups();
+      this.stormRing = this.createStormRing();
+      this.stormCore = this.createStormCore();
+    }
 
     this.camera = new UniversalCamera("ranger-camera", new Vector3(0, 5, 43), scene);
     this.camera.minZ = 0.05;
@@ -409,12 +435,14 @@ export class GameWorld {
   update(delta: number) {
     if (this.mode === "playing") {
       this.elapsed += delta;
-      this.updateStorm(delta);
+      if (this.options.step === "full") this.updateStorm(delta);
       this.updatePlayer(delta);
-      this.enemyDirector.update(delta, this);
-      this.updateProjectiles(delta);
-      this.updatePickups(delta);
-      this.checkEndState();
+      if (this.options.step === "full") {
+        this.enemyDirector.update(delta, this);
+        this.updateProjectiles(delta);
+        this.updatePickups(delta);
+        this.checkEndState();
+      }
     }
     this.updateCamera(delta);
     this.uiTick -= delta;
@@ -495,6 +523,89 @@ export class GameWorld {
     [[-70, 70, 16, 11], [72, 65, 18, 13], [-79, -57, 20, 12], [78, -68, 15, 10], [-7, -88, 18, 12], [96, 5, 22, 14]].forEach(([x, z, height, radius], index) => this.createMesa(index, x, z, height, radius));
     [[-58, -9], [47, -4], [17, 59], [-19, -58]].forEach(([x, z], index) => this.createPylon(index, x, z));
     this.createDistantIslets();
+    this.createRoads();
+    this.createHills();
+    this.createTrees();
+    this.createBuildings();
+  }
+
+  private createRoads() {
+    const roadMat = new StandardMaterial("step1-road-mat", this.scene);
+    roadMat.diffuseColor = new Color3(0.18, 0.12, 0.08);
+    roadMat.specularColor = Color3.Black();
+    [[0, 0, 18, 150, 0.12], [0, 0, 150, 18, -0.32], [-43, -1, 10, 92, 0.18]].forEach(([x, z, width, depth, rotation], index) => {
+      const road = MeshBuilder.CreateGround(`step1-road-${index}`, { width, height: depth, subdivisions: 4 }, this.scene);
+      road.position.set(x, 0.035, z);
+      road.rotation.y = rotation;
+      road.material = roadMat;
+      const stripe = MeshBuilder.CreateGround(`step1-road-stripe-${index}`, { width: Math.max(0.18, width * 0.035), height: depth * 0.92, subdivisions: 1 }, this.scene);
+      stripe.position.set(x, 0.045, z);
+      stripe.rotation.y = rotation;
+      const stripeMat = new StandardMaterial(`step1-road-stripe-mat-${index}`, this.scene);
+      stripeMat.diffuseColor = new Color3(0.58, 0.32, 0.13);
+      stripeMat.emissiveColor = new Color3(0.035, 0.012, 0.002);
+      stripe.material = stripeMat;
+    });
+  }
+
+  private createHills() {
+    [[-34, -20, 5.2, 14], [36, 25, 4.2, 11], [-48, 35, 3.4, 9]].forEach(([x, z, height, radius], index) => {
+      const hill = MeshBuilder.CreateCylinder(`step1-hill-${index}`, { height, diameterTop: radius * 1.15, diameterBottom: radius * 2.2, tessellation: 12 }, this.scene);
+      hill.position.set(x, height / 2, z);
+      const mat = new StandardMaterial(`step1-hill-mat-${index}`, this.scene);
+      mat.diffuseColor = new Color3(0.24, 0.11, 0.045);
+      mat.specularColor = Color3.Black();
+      hill.material = mat;
+      this.worldBuilder.registerObstacle(new Vector3(x, 0, z), radius * 0.84);
+    });
+  }
+
+  private createTrees() {
+    const treeMat = new StandardMaterial("step1-tree-trunk", this.scene);
+    treeMat.diffuseColor = new Color3(0.12, 0.055, 0.025);
+    const canopyMat = new StandardMaterial("step1-tree-canopy", this.scene);
+    canopyMat.diffuseColor = new Color3(0.08, 0.19, 0.14);
+    canopyMat.emissiveColor = new Color3(0.01, 0.025, 0.018);
+    [[-18, 31, 1.2], [23, 34, 1.1], [44, -13, 1.4], [-52, -24, 1.25], [55, 40, 1.05], [-63, 16, 1.2]].forEach(([x, z, scale], index) => {
+      const root = new TransformNode(`step1-tree-${index}`, this.scene);
+      root.position.set(x, 0, z);
+      const trunk = MeshBuilder.CreateCylinder(`step1-trunk-${index}`, { height: 3.2 * scale, diameterTop: 0.34 * scale, diameterBottom: 0.56 * scale, tessellation: 8 }, this.scene);
+      trunk.parent = root;
+      trunk.position.y = 1.6 * scale;
+      trunk.material = treeMat;
+      const canopy = MeshBuilder.CreateIcoSphere(`step1-canopy-${index}`, { radius: 1.8 * scale, subdivisions: 1 }, this.scene);
+      canopy.parent = root;
+      canopy.position.y = 3.35 * scale;
+      canopy.scaling.y = 1.25;
+      canopy.material = canopyMat;
+      this.worldBuilder.registerObstacle(new Vector3(x, 0, z), 0.9 * scale);
+    });
+  }
+
+  private createBuildings() {
+    const wallMat = new StandardMaterial("step1-building-mat", this.scene);
+    wallMat.diffuseColor = new Color3(0.26, 0.18, 0.12);
+    wallMat.specularColor = Color3.Black();
+    const trimMat = new StandardMaterial("step1-building-trim", this.scene);
+    trimMat.diffuseColor = new Color3(0.06, 0.15, 0.17);
+    trimMat.emissiveColor = TEAL.scale(0.12);
+    [[-52, -42, 14, 9, 4.5], [48, 27, 11, 8, 5.2], [4, 62, 16, 7, 3.5]].forEach(([x, z, width, depth, height], index) => {
+      const root = new TransformNode(`step1-building-${index}`, this.scene);
+      root.position.set(x, 0, z);
+      const building = MeshBuilder.CreateBox(`step1-building-body-${index}`, { width, height, depth }, this.scene);
+      building.parent = root;
+      building.position.y = height / 2;
+      building.material = wallMat;
+      const roof = MeshBuilder.CreateBox(`step1-building-roof-${index}`, { width: width + 0.6, height: 0.22, depth: depth + 0.6 }, this.scene);
+      roof.parent = root;
+      roof.position.y = height + 0.12;
+      roof.material = trimMat;
+      const door = MeshBuilder.CreateBox(`step1-building-door-${index}`, { width: 1.2, height: 2.2, depth: 0.08 }, this.scene);
+      door.parent = root;
+      door.position.set(0, 1.1, depth / 2 + 0.05);
+      door.material = trimMat;
+      this.worldBuilder.registerObstacle(new Vector3(x, 0, z), Math.max(width, depth) * 0.62);
+    });
   }
 
   private createBoulder(index: number, x: number, z: number, size: number) {
@@ -691,6 +802,7 @@ export class GameWorld {
   private updateStorm(delta: number) {
     const targetRadius = Math.max(25, 93 - this.elapsed * 0.43);
     this.stormRadius += (targetRadius - this.stormRadius) * Math.min(1, delta * 0.8);
+    if (!this.stormRing || !this.stormCore) return;
     this.stormRing.scaling.x = this.stormRadius;
     this.stormRing.scaling.z = this.stormRadius;
     this.stormRing.rotation.y += delta * 0.08;
@@ -705,7 +817,8 @@ export class GameWorld {
   }
 
   private updatePlayer(delta: number) {
-    const snapshot = this.options.demo ? this.demoInput() : this.input.snapshot();
+    const rawSnapshot = this.options.demo ? this.demoInput() : this.input.snapshot();
+    const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : rawSnapshot;
     this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.spawnProjectile(origin, direction, "player", 25), (message) => this.pushEvent(message));
     this.currentAiming = this.playerController.aiming;
     this.currentCrouching = this.playerController.crouching;
@@ -887,7 +1000,7 @@ export class GameWorld {
   }
 
   private updateHud(_force = false) {
-    const zone = this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
       shield: this.player.shield,

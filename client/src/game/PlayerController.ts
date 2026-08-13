@@ -6,7 +6,7 @@ import { CameraController } from "./CameraController";
 import { WeaponSystem } from "./WeaponSystem";
 
 type Obstacle = { position: Vector3; radius: number };
-type PlayerRig = { root: { position: Vector3; rotation: Vector3 }; velocityY: number; alive: boolean; setMotionState: (state: MotionState) => void; updateVisual: (delta: number) => void };
+type PlayerRig = { root: { position: Vector3; rotation: Vector3 }; velocityY: number; alive: boolean; setMotionState: (state: MotionState) => void; setColliderHeight?: (height: number) => void; updateVisual: (delta: number) => void };
 
 export class PlayerController {
   private moveVelocity = new Vector3();
@@ -22,6 +22,7 @@ export class PlayerController {
   update(delta: number, snapshot: InputSnapshot, obstacles: Obstacle[], resolveObstacles: (position: Vector3, clearance: number) => void, onFire: (origin: Vector3, direction: Vector3) => void, onEvent: (message: string) => void) {
     this.aiming = snapshot.aiming;
     this.crouching = snapshot.crouch && this.rig.root.position.y <= 0.025 && this.rig.velocityY <= 0.2;
+    this.rig.setColliderHeight?.(this.crouching ? 1.55 : 2.4);
     this.camera.look(snapshot.lookX, snapshot.lookY);
     const forward = this.camera.forward();
     const right = new Vector3(forward.z, 0, -forward.x);
