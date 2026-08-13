@@ -66,3 +66,15 @@ button { font: inherit; }
 @media (max-width: 900px) { .launch-screen { align-content: start; grid-template-columns: 1fr; gap: 20px; overflow-y: auto; padding: 38px 28px; }.avatar-chooser { justify-self: start; max-width: 430px; }.avatar-grid { max-width: 340px; }.launch-content h1 { font-size: clamp(38px, 7vw, 54px); } }
 @media (max-width: 720px) { .hud-topbar { padding: 12px 14px; grid-template-columns: 1fr auto; }.storm-readout { display: none; }.tactical-stack { top: 76px; right: 14px; }.mini-map-frame { width: 104px; height: 104px; }.vitals-panel { bottom: 42px; left: 14px; width: 185px; }.combat-panel { right: 14px; bottom: 32px; transform: scale(.8); transform-origin: right bottom; }.signal-card { display: none; }.event-feed { top: 82px; left: 14px; width: 210px; }.control-strip { display: none; }.launch-screen { display: block; padding: 56px 22px 38px; overflow-y: auto; }.launch-content { max-width: 430px; }.launch-content h1 { font-size: 43px; }.launch-copy { font-size: 13px; }.launch-logo { width: 70px; height: 70px; }.avatar-chooser { margin-top: 28px; }.avatar-card { min-height: 140px; }.avatar-card img { height: 92px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* TPS attachment — center sightline remains clear; state and weapon telemetry stay at the edges. */
+.state-chip { position: absolute; right: 50%; bottom: 82px; display: flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid rgba(19,217,196,.32); background: rgba(3,15,27,.72); color: #d8f8f4; transform: translateX(50%); font-family: "Chakra Petch", sans-serif; font-size: 9px; letter-spacing: .1em; backdrop-filter: blur(8px); }
+.state-chip span { color: #7fa3ad; font-size: 7px; }
+.state-chip strong { color: #13d9c4; font-size: 12px; }
+.state-chip i { color: #d6a650; font-size: 8px; font-style: normal; }
+.weapon-tag #aim-status { margin-left: 7px; color: #13d9c4; font-size: 8px; font-style: normal; letter-spacing: .12em; }
+@media (max-width: 720px) { .state-chip { bottom: 112px; } }
+
+/* TPS telemetry placement — never cover the player silhouette or central sightline. */
+.state-chip { right: 24px; bottom: 122px; transform: none; }
+@media (max-width: 720px) { .state-chip { right: 14px; bottom: 116px; } }

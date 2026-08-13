@@ -130,7 +130,7 @@ export default function GameCanvas() {
         </section>
 
         <section className="combat-panel" aria-label="武器状態">
-          <div className="weapon-tag"><span className="weapon-dot" />ARC PULSE RIFLE</div>
+          <div className="weapon-tag"><span className="weapon-dot" />ARC PULSE RIFLE <i id="aim-status">HIP</i></div>
           <div className="ammo-value"><strong id="ammo-value">30</strong><span>/ <i id="reserve-value">90</i></span></div>
           <div className="weapon-slots"><i className="selected">1</i><i>2</i><i>3</i><i>4</i></div>
         </section>
@@ -141,9 +141,10 @@ export default function GameCanvas() {
         </section>
 
         <div className="crosshair" aria-hidden="true"><i /><b /></div>
+        <div className="state-chip"><span>MOVE STATE</span><strong id="motion-state">IDLE</strong><i id="crouch-state">STAND</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>
         <ol id="event-feed" className="event-feed" aria-label="戦闘ログ" />
-        <p className="control-strip">WASD 移動 <b>·</b> SHIFT ダッシュ <b>·</b> SPACE 跳躍 <b>·</b> クリック 発射</p>
+        <p className="control-strip">WASD 移動 <b>·</b> SHIFT 走る <b>·</b> SPACE ジャンプ <b>·</b> C / CTRL しゃがむ <b>·</b> 右クリック 照準 <b>·</b> 左クリック 射撃 <b>·</b> R リロード</p>
       </div>
 
       {!started && (

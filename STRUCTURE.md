@@ -55,3 +55,9 @@ App.tsx
 ## Cleanup Contract
 
 `createGameScene` は `{ scene, dispose }` を返す。`dispose` は `GameWorld` のリスナー、DOM HUD、ポインタロック状態、オーディオノード、Babylonシーンを順番に解放する。`GameCanvas` はReact StrictModeの二重マウントを防ぎ、ResizeListenerとEngineを必ず破棄する。
+
+## 添付TPS仕様の責務拡張
+
+`InputManager` はキーボード、マウス、ポインターロックを所有し、WASD、Shift、Space、C/Ctrl、右クリック、左クリック、Rをフレーム単位のスナップショットへ正規化する。`GameWorld` はカメラのyaw／pitch、加速度付き移動、方向転換、ジャンプと重力、しゃがみ、状態遷移、射撃、リロード、ダメージ、敵AIを所有する。`Combatant` は生成キャラクターのレンダー表示と、方向転換・歩行・走行・ジャンプ・しゃがみ・射撃に対応する階層メッシュの動きを所有する。`GameCanvas` はゲームキャンバスとHUDのDOMフレームだけを持ち、状態値はGameWorldからID参照で更新する。
+
+カメラはプレイヤー後方からのOrbit形式とし、照準中は肩越し距離へ補間する。障害物との線分距離を検査して、安全位置へ補正する。ブラウザのポインターロックはInputManagerが要求し、dispose時にイベントを解除する。生成レンダーが未読込みまたは失敗した場合は、同じCombatant階層の手続き3Dモデルを表示する。

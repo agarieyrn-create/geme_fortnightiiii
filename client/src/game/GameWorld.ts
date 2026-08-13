@@ -69,6 +69,10 @@ class Combatant {
   private readonly armorMaterial: StandardMaterial;
   private readonly accentMaterial: StandardMaterial;
   private readonly cloakMaterial: StandardMaterial;
+  private readonly limbs: Mesh[] = [];
+  private motionState = "IDLE";
+  private poseTime = 0;
+  private baseScale = 1;
   hp = 100;
   shield = 50;
   alive = true;
@@ -166,6 +170,7 @@ class Combatant {
     this.accentMaterial.diffuseColor.copyFrom(loadout.accent);
     this.accentMaterial.emissiveColor.copyFrom(loadout.accent.scale(0.46));
     this.cloakMaterial.diffuseColor.copyFrom(loadout.cloak);
+    this.baseScale = loadout.scale;
     this.root.scaling.setAll(loadout.scale);
   }
 
@@ -173,7 +178,7 @@ class Combatant {
     const url = CHARACTER_RENDERS[renderId];
     if (!url) return;
     if (!this.portrait) {
-      this.portrait = MeshBuilder.CreatePlane(`${this.id}-portrait`, { width: 2.5, height: 3.75, sideOrientation: Mesh.DOUBLESIDE }, this.scene);
+      this.portrait = MeshBuilder.CreatePlane(`${this.id}-portrait`, { width: 1.45, height: 2.38, sideOrientation: Mesh.DOUBLESIDE }, this.scene);
       this.portrait.parent = this.root;
       this.portrait.position.y = 1.72;
       this.portrait.scaling.y = -1;
@@ -221,8 +226,22 @@ class Combatant {
 
   updateVisual(delta: number) {
     this.flash = Math.max(0, this.flash - delta);
+    this.poseTime += delta;
     this.halo.scaling.setAll(1 + Math.sin(performance.now() * 0.005) * 0.035);
     this.bodyMaterial.emissiveColor = this.flash > 0 ? new Color3(0.9, 0.9, 0.9) : Color3.Black();
+    const moving = this.motionState.includes("WALK") || this.motionState === "RUN" || this.motionState === "CROUCH WALK";
+    const stride = Math.sin(this.poseTime * (this.motionState === "RUN" ? 12 : 8)) * (moving ? (this.motionState === "RUN" ? 0.58 : 0.34) : 0.025);
+    if (this.limbs.length >= 4) {
+      this.limbs[0].rotation.x = stride;
+      this.limbs[1].rotation.x = -stride;
+      this.limbs[2].rotation.x = -stride * 0.82;
+      this.limbs[3].rotation.x = stride * 0.82;
+    }
+    if (this.motionState === "CROUCH IDLE" || this.motionState === "CROUCH WALK") {
+      this.root.scaling.y = this.baseScale * 0.68;
+    } else if (!this.motionState.includes("JUMP") && this.motionState !== "FALL") {
+      this.root.scaling.y = this.baseScale;
+    }
   }
 
   dispose() {
@@ -235,6 +254,11 @@ class Combatant {
     limb.position.set(x, y, z);
     limb.rotation.z = tilt;
     limb.material = material;
+    this.limbs.push(limb);
+  }
+
+  setMotionState(state: string) {
+    this.motionState = state;
   }
 
   private addArmorPart(name: string, x: number, y: number, z: number, width: number, height: number, depth: number, material: StandardMaterial) {
@@ -320,13 +344,19 @@ export class GameWorld {
   ammo = 30;
   reserve = 90;
   elims = 0;
+  private reloadTimer = 0;
+  private moveVelocity = new Vector3();
+  private wasGrounded = true;
+  private lastMotionState = "IDLE";
+  private currentAiming = false;
+  private currentCrouching = false;
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
     scene.ambientColor = new Color3(0.14, 0.18, 0.25);
     scene.fogMode = Scene.FOGMODE_EXP2;
     scene.fogColor = new Color3(0.035, 0.07, 0.12);
-    scene.fogDensity = 0.0085;
+    scene.fogDensity = canvas.clientWidth < 600 ? 0.0042 : 0.0085;
     new HemisphericLight("sky-hemisphere", new Vector3(0.15, 1, 0.1), scene).intensity = 0.88;
     const sun = new DirectionalLight("low-sun", new Vector3(-0.36, -0.72, 0.38), scene);
     sun.position = new Vector3(42, 72, -35);
@@ -398,6 +428,17 @@ export class GameWorld {
     material.disableLighting = true;
     mesh.material = material;
     this.projectiles.push({ mesh, velocity: direction.normalize().scale(owner === "player" ? 52 : 38), owner, life: 1.35, damage });
+    if (owner === "player") this.createMuzzleFlash(origin, direction);
+  }
+
+  private createMuzzleFlash(origin: Vector3, direction: Vector3) {
+    const flash = MeshBuilder.CreateSphere("muzzle-flash", { diameter: 0.34, segments: 8 }, this.scene);
+    flash.position.copyFrom(origin.add(direction.scale(0.22)));
+    const material = new StandardMaterial("muzzle-flash-mat", this.scene);
+    material.emissiveColor = AMBER;
+    material.disableLighting = true;
+    flash.material = material;
+    window.setTimeout(() => flash.dispose(), 70);
   }
 
   resolveObstacles(position: Vector3, clearance: number) {
@@ -661,42 +702,69 @@ export class GameWorld {
 
   private updatePlayer(delta: number) {
     const snapshot = this.options.demo ? this.demoInput() : this.input.snapshot();
+    this.currentAiming = snapshot.aiming;
+    this.currentCrouching = snapshot.crouch;
     this.yaw -= snapshot.lookX * 0.0023;
     this.pitch = Math.max(-0.72, Math.min(0.28, this.pitch - snapshot.lookY * 0.00185));
     const forward = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const right = new Vector3(forward.z, 0, -forward.x);
     const direction = forward.scale(snapshot.forward).add(right.scale(snapshot.right));
-    if (direction.lengthSquared() > 0.01) {
-      direction.normalize();
-      const speed = snapshot.sprint ? 9.2 : 5.4;
-      this.player.root.position.addInPlace(direction.scale(speed * delta));
-      this.player.root.rotation.y = Math.atan2(direction.x, direction.z);
+    const grounded = this.player.root.position.y <= 0.025 && this.player.velocityY <= 0.2;
+    const crouched = snapshot.crouch && grounded;
+    const moving = direction.lengthSquared() > 0.01;
+    if (moving) direction.normalize();
+    const speed = crouched ? 2.65 : snapshot.sprint && !snapshot.aiming ? 9.2 : snapshot.aiming ? 4.1 : 5.4;
+    const targetVelocity = moving ? direction.scale(speed) : Vector3.Zero();
+    const response = 1 - Math.exp(-(grounded ? 15 : 5) * delta);
+    this.moveVelocity = Vector3.Lerp(this.moveVelocity, targetVelocity, response);
+    this.player.root.position.addInPlace(this.moveVelocity.scale(delta));
+    if (moving || snapshot.aiming) {
+      const targetRotation = snapshot.aiming ? this.yaw : Math.atan2(direction.x, direction.z);
+      const rotationDelta = Math.atan2(Math.sin(targetRotation - this.player.root.rotation.y), Math.cos(targetRotation - this.player.root.rotation.y));
+      this.player.root.rotation.y += rotationDelta * Math.min(1, delta * (snapshot.aiming ? 16 : 11));
     }
-    if (snapshot.jump && !this.jumpHeld && this.player.root.position.y <= 0.01) this.player.velocityY = 8.1;
+    if (snapshot.jump && !this.jumpHeld && grounded && !crouched) this.player.velocityY = 8.1;
     this.jumpHeld = snapshot.jump;
     this.player.velocityY -= 22 * delta;
     this.player.root.position.y = Math.max(0, this.player.root.position.y + this.player.velocityY * delta);
-    if (this.player.root.position.y <= 0) this.player.velocityY = 0;
+    const nowGrounded = this.player.root.position.y <= 0.001;
+    if (nowGrounded) this.player.velocityY = 0;
     this.player.root.position.x = Math.max(-104, Math.min(104, this.player.root.position.x));
     this.player.root.position.z = Math.max(-104, Math.min(104, this.player.root.position.z));
-    this.resolveObstacles(this.player.root.position, 0.84);
-    this.player.updateVisual(delta);
+    this.resolveObstacles(this.player.root.position, crouched ? 0.56 : 0.84);
 
+    const wasReloading = this.reloadTimer > 0;
+    this.reloadTimer = Math.max(0, this.reloadTimer - delta);
+    if (snapshot.reloadPressed && this.reloadTimer <= 0 && this.ammo < 30 && this.reserve > 0) {
+      this.reloadTimer = 0.82;
+      this.announcement = "マガジン交換中";
+      this.pushEvent("パルスライフルを再装填");
+    }
+    if (wasReloading && this.reloadTimer === 0) {
+      const refill = Math.min(30 - this.ammo, this.reserve);
+      this.reserve -= refill;
+      this.ammo += refill;
+      this.announcement = "マガジン装填完了";
+    }
     this.fireCooldown -= delta;
-    if (snapshot.firing && this.fireCooldown <= 0 && this.ammo > 0) {
-      const muzzle = this.player.root.position.add(new Vector3(0, 1.32, 0)).add(forward.scale(0.8));
+    if (snapshot.firing && this.reloadTimer <= 0 && this.fireCooldown <= 0 && this.ammo > 0) {
+      const muzzle = this.player.root.position.add(new Vector3(0, crouched ? 0.94 : 1.32, 0)).add(forward.scale(0.8));
       const aim = forward.add(new Vector3(0, this.pitch * 0.42, 0)).normalize();
       this.spawnProjectile(muzzle, aim, "player", 25);
       this.fireCooldown = 0.145;
       this.ammo -= 1;
     }
-    if (this.ammo <= 0 && this.reserve > 0 && this.fireCooldown <= -0.4) {
-      const refill = Math.min(30, this.reserve);
-      this.reserve -= refill;
-      this.ammo = refill;
-      this.fireCooldown = 0.7;
-      this.pushEvent("パルスライフルを再装填");
+    if (this.ammo <= 0 && this.reserve > 0 && this.reloadTimer <= 0) this.reloadTimer = 0.82;
+    const motionState = this.reloadTimer > 0 ? "RELOAD" : !nowGrounded ? (this.player.velocityY > 0 ? "JUMP" : "FALL") : crouched ? (moving ? "CROUCH WALK" : "CROUCH IDLE") : snapshot.aiming ? (snapshot.firing ? "FIRE" : "AIM") : moving ? (snapshot.sprint ? "RUN" : "WALK") : "IDLE";
+    this.player.setMotionState(motionState);
+    if (motionState !== this.lastMotionState) {
+      if (motionState === "JUMP") this.pushEvent("ジャンプ開始");
+      if (motionState === "FALL" && this.wasGrounded) this.pushEvent("空中状態");
+      if (motionState === "IDLE" && !this.wasGrounded) this.pushEvent("着地");
+      this.lastMotionState = motionState;
     }
+    this.wasGrounded = nowGrounded;
+    this.player.updateVisual(delta);
   }
 
   private updateProjectiles(delta: number) {
@@ -750,13 +818,31 @@ export class GameWorld {
     });
   }
 
-  private updateCamera(_delta: number) {
+  private updateCamera(delta: number) {
+    const aiming = this.currentAiming;
+    const crouching = this.currentCrouching;
+    this.pitch = Math.max(-0.72, Math.min(0.28, this.pitch));
     const forward = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const shoulder = new Vector3(Math.cos(this.yaw) * 1.25, 0, -Math.sin(this.yaw) * 1.25);
-    const target = this.player.root.position.add(new Vector3(0, 1.42, 0));
-    const desired = target.subtract(forward.scale(7.2)).add(new Vector3(0, 3.5 + this.pitch * 2.2, 0)).add(shoulder);
-    this.camera.position.copyFrom(desired);
-    this.camera.setTarget(target.add(forward.scale(8)).add(new Vector3(0, this.pitch * 4, 0)));
+    const shoulder = new Vector3(Math.cos(this.yaw) * (aiming ? 0.82 : 1.25), 0, -Math.sin(this.yaw) * (aiming ? 0.82 : 1.25));
+    const target = this.player.root.position.add(new Vector3(0, crouching ? 1.0 : 1.42, 0));
+    const distance = aiming ? 4.65 : 7.2;
+    const desired = target.subtract(forward.scale(distance)).add(new Vector3(0, (aiming ? 2.65 : 3.5) + this.pitch * 2.2, 0)).add(shoulder);
+    let safePosition = desired.clone();
+    const segment = desired.subtract(target);
+    this.obstacles.forEach((obstacle) => {
+      const toObstacle = obstacle.position.subtract(target);
+      const denominator = Math.max(0.001, segment.lengthSquared());
+      const t = Math.max(0, Math.min(1, Vector3.Dot(toObstacle, segment) / denominator));
+      const closest = target.add(segment.scale(t));
+      const clearance = obstacle.radius + 0.62;
+      if (Vector3.DistanceSquared(closest, obstacle.position) < clearance * clearance) {
+        const away = closest.subtract(obstacle.position);
+        safePosition = obstacle.position.add((away.lengthSquared() > 0.01 ? away.normalize() : forward.scale(-1)).scale(clearance));
+        safePosition.y = Math.max(target.y + 0.35, safePosition.y);
+      }
+    });
+    this.camera.position = Vector3.Lerp(this.camera.position, safePosition, 1 - Math.exp(-delta * 18));
+    this.camera.setTarget(target.add(forward.scale(aiming ? 6 : 8)).add(new Vector3(0, this.pitch * 4, 0)));
   }
 
   private checkEndState() {
@@ -780,7 +866,7 @@ export class GameWorld {
       this.yaw += 0.2;
     }
     const radius = this.player.root.position.length();
-    return { forward: radius > this.stormRadius - 9 ? -1 : 0.75, right: Math.sin(this.elapsed * 0.9) * 0.55, jump: false, sprint: false, firing: Boolean(closest), lookX: 0, lookY: 0 };
+    return { forward: radius > this.stormRadius - 9 ? -1 : 0.75, right: Math.sin(this.elapsed * 0.9) * 0.55, jump: false, sprint: false, crouch: false, aiming: false, firing: Boolean(closest), reloadPressed: false, lookX: 0, lookY: 0 };
   }
 
   private updateHud(force = false) {
@@ -801,6 +887,9 @@ export class GameWorld {
     setText("storm-timer", this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`);
     setText("zone-status", this.player.root.position.length() > this.stormRadius ? "BREACH" : "STABLE");
     setText("pickup-status", this.announcement);
+    setText("motion-state", this.lastMotionState);
+    setText("crouch-state", this.currentCrouching ? "CROUCH" : "STAND");
+    setText("aim-status", this.currentAiming ? "AIM" : "HIP");
     setWidth("health-fill", this.player.hp);
     setWidth("shield-fill", this.player.shield);
     const miniPlayer = document.getElementById("mini-player") as HTMLElement | null;
