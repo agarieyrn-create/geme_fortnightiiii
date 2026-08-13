@@ -53,3 +53,12 @@
 - [x] 左スティック、右スワイプ、ジャンプ・しゃがみ・ダッシュボタンをモバイルHUDへ実装する。
 - [x] 14項目をPC・モバイルで検証し、既存マップ・ミニマップ・UIを壊していないことを確認する。
 - [ ] 改善版をビルド・保存し、次のゲームシステム追加前の基盤として共有する。
+
+## Real 3D Humanoid Pass
+
+- [x] 2D画像・Billboard・Spriteのプレイヤー表示経路を特定し、プレイ中の使用を停止する。
+- [x] 軽量なGLB／GLTF Humanoidモデル、Skeleton／Bones、Idle・Walk・Run・Jump・Fall・Land・Crouchアニメーションを準備する。
+- [x] Babylon.jsのAssetContainer／SceneLoaderで本物の3D MeshとAnimationGroupを読み込む。
+- [x] PlayerControllerの状態をAnimationGroupへクロスフェード接続し、移動方向へ3Dモデル本体を回転させる。
+- [x] 正面・背面・左右側面・斜めを360度確認し、PC・モバイルで描画する。
+- [x] 型チェック、本番ビルド、ブラウザログ確認後に改修版を保存する。

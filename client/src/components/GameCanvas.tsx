@@ -113,8 +113,9 @@ export default function GameCanvas() {
             </div>
           </div>
           <div className="storm-readout">
-            <span className="eyebrow">EXPLORATION MODE</span>
-            <strong id="storm-timer">STEP 1 // EXPLORE</strong>
+<span className="eyebrow">EXPLORATION MODE</span>
+              <strong id="storm-timer">STEP 1 // EXPLORE</strong>
+              <small className="rig-status">PLAYER RIG // GLB HUMANOID · SKELETON</small>
           </div>
           <div className="remaining-readout">
             <span className="eyebrow">SURVIVORS</span>

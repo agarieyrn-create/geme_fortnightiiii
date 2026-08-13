@@ -103,3 +103,6 @@ button { font: inherit; }
   .touch-actions button:active { background: rgba(19, 217, 196, .46); transform: scale(.95); }
   .step1-mode .control-strip { bottom: 8px; font-size: 8px; }
 }
+
+/* Real 3D player diagnostic: the live avatar is a GLB skinned mesh, never a billboard. */
+.rig-status { display: block; margin-top: 4px; color: rgba(157, 226, 217, .65); font-family: "Chakra Petch", sans-serif; font-size: 8px; letter-spacing: .12em; }

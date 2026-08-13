@@ -21,6 +21,7 @@ import { PlayerController } from "./PlayerController";
 import { WeaponSystem } from "./WeaponSystem";
 import { HudController } from "./HudController";
 import { AnimationController } from "./AnimationController";
+import { HumanoidModelController } from "./HumanoidModelController";
 import { EnemyDirector } from "./EnemyDirector";
 import { WorldBuilder } from "./WorldBuilder";
 
@@ -37,15 +38,6 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
   rustjaw: { suit: new Color3(0.11, 0.055, 0.045), armor: new Color3(0.46, 0.075, 0.035), accent: new Color3(0.96, 0.08, 0.04), cloak: new Color3(0.27, 0.04, 0.025), scale: 1.2 },
   veil: { suit: new Color3(0.11, 0.08, 0.14), armor: new Color3(0.3, 0.045, 0.11), accent: new Color3(0.95, 0.1, 0.08), cloak: new Color3(0.25, 0.02, 0.08), scale: 0.86 },
   anker: { suit: new Color3(0.1, 0.09, 0.08), armor: new Color3(0.56, 0.18, 0.04), accent: new Color3(0.97, 0.14, 0.04), cloak: new Color3(0.39, 0.105, 0.02), scale: 1.24 },
-};
-
-const CHARACTER_RENDERS: Record<string, string> = {
-  kairo: "/manus-storage/stormfall-player-anchor_21f4d359.png",
-  haze: "/manus-storage/stormfall-haze-final_4236e3e5.png",
-  vanta: "/manus-storage/stormfall-vanta-final_dc45be78.png",
-  rustjaw: "/manus-storage/stormfall-rustjaw-final_97dfa9cd.png",
-  veil: "/manus-storage/stormfall-veil-final_829eb401.png",
-  anker: "/manus-storage/stormfall-anker-final_a22065d6.png",
 };
 
 export type MatchOutcome = "victory" | "defeat";
@@ -71,8 +63,6 @@ class Combatant {
   readonly root: TransformNode;
   readonly body: Mesh;
   readonly halo: Mesh;
-  private portrait?: Mesh;
-  private portraitMaterial?: StandardMaterial;
   private readonly bodyMaterial: StandardMaterial;
   private readonly armorMaterial: StandardMaterial;
   private readonly accentMaterial: StandardMaterial;
@@ -81,6 +71,7 @@ class Combatant {
   private readonly collider: Mesh;
   private colliderHeight = 2.4;
   private readonly animationController = new AnimationController();
+  private readonly humanoid?: HumanoidModelController;
   private motionState = "IDLE";
   private poseTime = 0;
   private baseScale = 1;
@@ -99,6 +90,7 @@ class Combatant {
   ) {
     this.root = new TransformNode(`${id}-root`, scene);
     this.root.position.copyFrom(position);
+    this.humanoid = enemy ? undefined : new HumanoidModelController(scene, this.root, id);
     this.body = MeshBuilder.CreateCapsule(`${id}-body`, { height: 1.18, radius: 0.32, tessellation: 12 }, scene);
     this.body.parent = this.root;
     this.body.position.y = 1.28;
@@ -178,6 +170,7 @@ class Combatant {
     this.halo.rotation.x = Math.PI / 2;
     this.halo.position.y = 0.08;
     this.halo.material = this.accentMaterial;
+    void this.humanoid?.load();
   }
 
   applyLoadout(loadoutId: string) {
@@ -190,40 +183,6 @@ class Combatant {
     this.cloakMaterial.diffuseColor.copyFrom(loadout.cloak);
     this.baseScale = loadout.scale;
     this.root.scaling.setAll(loadout.scale);
-  }
-
-  setPortrait(renderId: string) {
-    const url = CHARACTER_RENDERS[renderId];
-    if (!url) return;
-    if (!this.portrait) {
-      this.portrait = MeshBuilder.CreatePlane(`${this.id}-portrait`, { width: 1.45, height: 2.38, sideOrientation: Mesh.DOUBLESIDE }, this.scene);
-      this.portrait.parent = this.root;
-      this.portrait.position.y = 1.72;
-      this.portrait.scaling.y = -1;
-      this.portrait.billboardMode = Mesh.BILLBOARDMODE_ALL;
-      this.portrait.setEnabled(false);
-      this.portraitMaterial = new StandardMaterial(`${this.id}-portrait-mat`, this.scene);
-      this.portraitMaterial.backFaceCulling = false;
-      this.portraitMaterial.useAlphaFromDiffuseTexture = true;
-      this.portraitMaterial.disableLighting = true;
-      this.portraitMaterial.emissiveColor = new Color3(0.88, 0.94, 0.96);
-      this.portrait.material = this.portraitMaterial;
-    }
-    const texture = new Texture(url, this.scene, true, false, Texture.TRILINEAR_SAMPLINGMODE, undefined, () => {
-      this.portrait?.setEnabled(false);
-      this.root.getChildMeshes().forEach((mesh) => {
-        if (mesh !== this.portrait) mesh.setEnabled(true);
-      });
-    });
-    texture.hasAlpha = true;
-    texture.onLoadObservable.addOnce(() => {
-      this.root.getChildMeshes().forEach((mesh) => {
-        if (mesh !== this.portrait) mesh.setEnabled(false);
-      });
-      this.portrait?.setEnabled(true);
-    });
-    this.portraitMaterial!.diffuseTexture = texture;
-    this.portraitMaterial!.opacityTexture = texture;
   }
 
   applyDamage(amount: number) {
@@ -248,9 +207,11 @@ class Combatant {
     this.halo.scaling.setAll(1 + Math.sin(performance.now() * 0.005) * 0.035);
     this.bodyMaterial.emissiveColor = this.flash > 0 ? new Color3(0.9, 0.9, 0.9) : Color3.Black();
     this.animationController.update(delta, this.motionState as import("./contracts").MotionState, this.limbs, this.root, this.baseScale);
+    this.humanoid?.update(delta, this.motionState as import("./contracts").MotionState);
   }
 
   dispose() {
+    this.humanoid?.dispose();
     this.root.dispose(false, true);
   }
 
@@ -265,6 +226,7 @@ class Combatant {
 
   setMotionState(state: string) {
     this.motionState = state;
+    this.humanoid?.setMotion(state as import("./contracts").MotionState);
   }
 
   setColliderHeight(height: number) {
@@ -401,7 +363,6 @@ export class GameWorld {
     this.touchInput = new TouchInputManager(canvas);
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout("kairo");
-    if (options.step === "full") this.player.setPortrait("kairo");
     this.player.shield = 65;
     if (options.step === "full") {
       this.createRivals();
@@ -431,7 +392,6 @@ export class GameWorld {
   setPlayerAvatar(avatarId: string) {
     if (this.mode !== "briefing") return;
     this.player.applyLoadout(avatarId);
-    this.player.setPortrait(avatarId);
     this.announcement = `${avatarId.toUpperCase()} の降下準備完了`;
   }
 
@@ -747,7 +707,6 @@ export class GameWorld {
       const rival = new Rival(this.scene, `rival-${index + 1}`, position);
       const loadout = ["rustjaw", "veil", "anker", "rustjaw"][index];
       rival.applyLoadout(loadout);
-      rival.setPortrait(loadout);
       rival.shield = 35 + index * 4;
       this.rivals.push(rival);
     });
