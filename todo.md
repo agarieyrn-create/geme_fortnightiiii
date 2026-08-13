@@ -26,3 +26,11 @@
 - [ ] 保存・共有完了
 
 ---
+
+## 構造再設計
+
+- [x] 現行のGameWorld集中構造と添付仕様のPhase 1〜9を差分整理する。
+- [x] InputManager、Player、CameraController、AnimationController、WeaponSystem、EnemyAI、WorldBuilder、HudControllerのデータ契約を設計する。
+- [x] 既存のGameWorld集中ロジックを新しい責務分離構造へ移行する。
+- [x] Phase 1〜9の操作可能性を段階的に検証し、実行時エラーを修正する。
+- [ ] 再設計版をビルド・画面確認し、チェックポイントとして保存する。

@@ -15,6 +15,13 @@ import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { InputManager, type InputSnapshot } from "./InputManager";
+import { CameraController } from "./CameraController";
+import { PlayerController } from "./PlayerController";
+import { WeaponSystem } from "./WeaponSystem";
+import { HudController } from "./HudController";
+import { AnimationController } from "./AnimationController";
+import { EnemyDirector } from "./EnemyDirector";
+import { WorldBuilder } from "./WorldBuilder";
 
 const TEAL = new Color3(0.075, 0.85, 0.77);
 const AMBER = new Color3(1, 0.54, 0.15);
@@ -70,6 +77,7 @@ class Combatant {
   private readonly accentMaterial: StandardMaterial;
   private readonly cloakMaterial: StandardMaterial;
   private readonly limbs: Mesh[] = [];
+  private readonly animationController = new AnimationController();
   private motionState = "IDLE";
   private poseTime = 0;
   private baseScale = 1;
@@ -229,19 +237,7 @@ class Combatant {
     this.poseTime += delta;
     this.halo.scaling.setAll(1 + Math.sin(performance.now() * 0.005) * 0.035);
     this.bodyMaterial.emissiveColor = this.flash > 0 ? new Color3(0.9, 0.9, 0.9) : Color3.Black();
-    const moving = this.motionState.includes("WALK") || this.motionState === "RUN" || this.motionState === "CROUCH WALK";
-    const stride = Math.sin(this.poseTime * (this.motionState === "RUN" ? 12 : 8)) * (moving ? (this.motionState === "RUN" ? 0.58 : 0.34) : 0.025);
-    if (this.limbs.length >= 4) {
-      this.limbs[0].rotation.x = stride;
-      this.limbs[1].rotation.x = -stride;
-      this.limbs[2].rotation.x = -stride * 0.82;
-      this.limbs[3].rotation.x = stride * 0.82;
-    }
-    if (this.motionState === "CROUCH IDLE" || this.motionState === "CROUCH WALK") {
-      this.root.scaling.y = this.baseScale * 0.68;
-    } else if (!this.motionState.includes("JUMP") && this.motionState !== "FALL") {
-      this.root.scaling.y = this.baseScale;
-    }
+    this.animationController.update(delta, this.motionState as import("./contracts").MotionState, this.limbs, this.root, this.baseScale);
   }
 
   dispose() {
@@ -323,11 +319,17 @@ class Rival extends Combatant {
 export class GameWorld {
   readonly player: Combatant;
   readonly rivals: Rival[] = [];
+  private readonly enemyDirector = new EnemyDirector<Rival, GameWorld>(this.rivals);
   readonly input: InputManager;
   readonly camera: UniversalCamera;
-  readonly obstacles: Obstacle[] = [];
+  private readonly worldBuilder = new WorldBuilder();
+  readonly obstacles: Obstacle[] = this.worldBuilder.obstacles;
   readonly projectiles: Projectile[] = [];
   readonly pickups: Pickup[] = [];
+  private readonly cameraController: CameraController;
+  private readonly weaponSystem: WeaponSystem;
+  private readonly playerController: PlayerController;
+  private readonly hudController = new HudController();
   private readonly stormRing: Mesh;
   private readonly stormCore: Mesh;
   private readonly terrainMaterial: StandardMaterial;
@@ -382,8 +384,10 @@ export class GameWorld {
     this.camera = new UniversalCamera("ranger-camera", new Vector3(0, 5, 43), scene);
     this.camera.minZ = 0.05;
     this.camera.maxZ = 500;
-    this.camera.fov = 0.94;
     scene.activeCamera = this.camera;
+    this.cameraController = new CameraController(this.camera, this.obstacles);
+    this.weaponSystem = new WeaponSystem();
+    this.playerController = new PlayerController(this.player, this.cameraController, this.weaponSystem);
     this.updateCamera(0);
     this.updateHud(true);
   }
@@ -407,7 +411,7 @@ export class GameWorld {
       this.elapsed += delta;
       this.updateStorm(delta);
       this.updatePlayer(delta);
-      this.rivals.forEach((rival) => rival.update(delta, this));
+      this.enemyDirector.update(delta, this);
       this.updateProjectiles(delta);
       this.updatePickups(delta);
       this.checkEndState();
@@ -457,7 +461,7 @@ export class GameWorld {
   dispose() {
     this.input.dispose();
     this.player.dispose();
-    this.rivals.forEach((rival) => rival.dispose());
+    this.enemyDirector.dispose();
     this.pickups.forEach((pickup) => pickup.root.dispose(false, true));
     this.projectiles.forEach((projectile) => projectile.mesh.dispose());
   }
@@ -522,7 +526,7 @@ export class GameWorld {
     capMat.diffuseColor = new Color3(0.075, 0.09, 0.078);
     capMat.specularColor = Color3.Black();
     cap.material = capMat;
-    this.obstacles.push({ position: new Vector3(x, 0, z), radius: radius * 0.62 });
+    this.worldBuilder.registerObstacle(new Vector3(x, 0, z), radius * 0.62);
   }
 
   private createPylon(index: number, x: number, z: number) {
@@ -547,7 +551,7 @@ export class GameWorld {
     beaconMat.emissiveColor = TEAL;
     beaconMat.disableLighting = true;
     beacon.material = beaconMat;
-    this.obstacles.push({ position: new Vector3(x, 0, z), radius: 2 });
+    this.worldBuilder.registerObstacle(new Vector3(x, 0, z), 2);
   }
 
   private createDistantIslets() {
@@ -702,6 +706,14 @@ export class GameWorld {
 
   private updatePlayer(delta: number) {
     const snapshot = this.options.demo ? this.demoInput() : this.input.snapshot();
+    this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.spawnProjectile(origin, direction, "player", 25), (message) => this.pushEvent(message));
+    this.currentAiming = this.playerController.aiming;
+    this.currentCrouching = this.playerController.crouching;
+    this.lastMotionState = this.playerController.motion;
+  }
+
+  private updatePlayerLegacy(delta: number) {
+    const snapshot = this.options.demo ? this.demoInput() : this.input.snapshot();
     this.currentAiming = snapshot.aiming;
     this.currentCrouching = snapshot.crouch;
     this.yaw -= snapshot.lookX * 0.0023;
@@ -805,7 +817,7 @@ export class GameWorld {
         pickup.collected = true;
         pickup.root.setEnabled(false);
         if (pickup.type === "ammo") {
-          this.reserve = Math.min(180, this.reserve + 24);
+          this.weaponSystem.addReserve(24);
           this.pushEvent("補給物資：パルス弾薬 +24");
         } else if (pickup.type === "shield") {
           this.player.shield = Math.min(100, this.player.shield + 28);
@@ -819,6 +831,10 @@ export class GameWorld {
   }
 
   private updateCamera(delta: number) {
+    this.cameraController.update(delta, this.player.root.position, this.currentAiming, this.currentCrouching);
+  }
+
+  private updateCameraLegacy(delta: number) {
     const aiming = this.currentAiming;
     const crouching = this.currentCrouching;
     this.pitch = Math.max(-0.72, Math.min(0.28, this.pitch));
@@ -865,44 +881,26 @@ export class GameWorld {
     } else {
       this.yaw += 0.2;
     }
+    this.cameraController.setYaw(this.yaw);
     const radius = this.player.root.position.length();
     return { forward: radius > this.stormRadius - 9 ? -1 : 0.75, right: Math.sin(this.elapsed * 0.9) * 0.55, jump: false, sprint: false, crouch: false, aiming: false, firing: Boolean(closest), reloadPressed: false, lookX: 0, lookY: 0 };
   }
 
-  private updateHud(force = false) {
-    const setText = (id: string, text: string) => {
-      const element = document.getElementById(id);
-      if (element && (force || element.textContent !== text)) element.textContent = text;
-    };
-    const setWidth = (id: string, value: number) => {
-      const element = document.getElementById(id) as HTMLElement | null;
-      if (element) element.style.width = `${Math.max(0, Math.min(100, value))}%`;
-    };
-    setText("health-value", Math.ceil(this.player.hp).toString());
-    setText("shield-value", Math.ceil(this.player.shield).toString());
-    setText("ammo-value", this.ammo.toString());
-    setText("reserve-value", this.reserve.toString());
-    setText("elims-value", this.elims.toString());
-    setText("remaining-count", (this.rivals.filter((rival) => rival.alive).length + (this.player.alive ? 1 : 0)).toString());
-    setText("storm-timer", this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`);
-    setText("zone-status", this.player.root.position.length() > this.stormRadius ? "BREACH" : "STABLE");
-    setText("pickup-status", this.announcement);
-    setText("motion-state", this.lastMotionState);
-    setText("crouch-state", this.currentCrouching ? "CROUCH" : "STAND");
-    setText("aim-status", this.currentAiming ? "AIM" : "HIP");
-    setWidth("health-fill", this.player.hp);
-    setWidth("shield-fill", this.player.shield);
-    const miniPlayer = document.getElementById("mini-player") as HTMLElement | null;
-    if (miniPlayer) {
-      miniPlayer.style.left = `${50 + (this.player.root.position.x / 220) * 90}%`;
-      miniPlayer.style.top = `${50 + (this.player.root.position.z / 220) * 90}%`;
-    }
-    const safe = document.getElementById("mini-safe") as HTMLElement | null;
-    if (safe) {
-      const diameter = Math.max(20, Math.min(90, (this.stormRadius / 110) * 88));
-      safe.style.width = `${diameter}%`;
-      safe.style.height = `${diameter}%`;
-    }
+  private updateHud(_force = false) {
+    const zone = this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    this.hudController.render({
+      hp: this.player.hp,
+      shield: this.player.shield,
+      ammo: this.weaponSystem.state.magazine,
+      reserve: this.weaponSystem.state.reserve,
+      elims: this.elims,
+      remaining: this.enemyDirector.remaining() + (this.player.alive ? 1 : 0),
+      zone,
+      motion: this.playerController.motion,
+      aiming: this.playerController.aiming,
+      crouching: this.playerController.crouching,
+      pickup: this.announcement,
+    }, this.player.root.position, this.stormRadius);
   }
 
   private pushEvent(message: string) {

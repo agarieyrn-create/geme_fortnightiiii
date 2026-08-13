@@ -1,63 +1,53 @@
-# Stormfall: Last Horizon — Architecture
+# Stormfall: Last Horizon — TPS Architecture v2
 
-## Overview
+## Design Contract
 
-React はフルスクリーンのキャンバスと開始オーバーレイだけを管理し、Babylon.js がレンダリング、カメラ、入力、シーン、サウンドを担う。ゲーム規則は `client/src/game/` のフレームワーク非依存な TypeScript クラスに置き、メッシュは各ゲームオブジェクトが所有する。
+ReactはゲームキャンバスとHUDのフレームだけを担当し、Babylon.jsは3D描画とシーンライフサイクルを担当する。ゲーム規則は`client/src/game/`のプレーンTypeScriptクラスに分離し、各クラスは明示的な入力・状態・出力の契約を持つ。`GameWorld`は調停役に限定し、プレイヤーの移動、カメラ、武器、敵AI、フィールド、HUDを直接実装しない。
+
+## Runtime Tree
 
 ```text
 App.tsx
 └── GameCanvas.tsx
-    └── createGameScene(engine, canvas)
-        └── GameWorld
-            ├── InputManager
-            ├── Player
-            │   ├── Health
-            │   └── Weapon
-            ├── Rival[]
-            │   ├── Health
-            │   └── RivalBrain
-            ├── ProjectileSystem
-            ├── Pickup[]
-            ├── StormZone
-            ├── WorldBuilder
-            └── HudController
+    ├── InputManager              // キーボード・マウス・ポインターロック・将来のゲームパッド
+    └── createGameScene
+        └── GameWorld              // 試合状態とシステムの更新順だけを調停
+            ├── WorldBuilder       // 地形・丘・岩・木・建物・道・障害物・補給物資
+            ├── PlayerController   // 移動、加速、方向転換、ジャンプ、しゃがみ、地面判定
+            │   ├── CharacterRig   // 階層メッシュ、生成レンダー、姿勢
+            │   └── AnimationController // Idle/Walk/Run/Jump/Fall/Land/Crouch/Aim/Fire
+            ├── CameraController   // TPS Orbit、肩越し照準、Pitch制限、障害物補正
+            ├── WeaponSystem       // Arc Pulse Rifle、マガジン、リロード、発射間隔、Ray/Projectile
+            ├── EnemyDirector      // EnemyAgentの生成、索敵、追跡、射撃、死亡
+            │   └── EnemyAgent      // EnemyStateMachine + CharacterRig + HealthState
+            ├── ProjectileSystem   // 弾の移動、寿命、命中、ダメージイベント
+            ├── PickupSystem       // 弾薬、シールド、回復、接近回収
+            ├── StormSystem        // 安全領域、縮小、外側ダメージ
+            └── HudController      // DOMへ読み取り専用HudSnapshotを反映
 ```
 
-## Runtime Modules
+## Phase Contracts
 
-| Module | Ownership | Responsibility |
+| Phase | Module | 完成条件 |
 |---|---|---|
-| `scene.ts` | Babylon lifecycle | シーン生成、レンダーループへの接続、`GameHandle` の破棄処理 |
-| `GameWorld.ts` | Game session | 開始・更新・勝敗状態、各システムの更新順、ゲームイベントの仲介 |
-| `Player.ts` | Player avatar | 移動、ジャンプ、ダッシュ、照準方向、被弾、持ち物、メッシュ所有 |
-| `Rival.ts` | NPC avatar | 索敵、移動、射撃、回避、被弾、脱落、メッシュ所有 |
-| `RivalBrain.ts` | NPC behavior | 安全領域優先、プレイヤー索敵、距離に応じた追跡・横移動・射撃の状態遷移 |
-| `Weapon.ts` | Combat behavior | 発射間隔、弾薬、ダメージ、弾丸生成要求 |
-| `ProjectileSystem.ts` | Dense simulation | 弾丸の移動、寿命、地形・エンティティ当たり判定、ヒットイベント |
-| `StormZone.ts` | Match pressure | 段階的な半径縮小、嵐外ダメージ、境界メッシュ、次縮小までの時間 |
-| `Pickup.ts` | World interaction | 武器弾薬・シールドの接近判定、回収、視覚的な浮遊・発光 |
-| `WorldBuilder.ts` | Environment | 地形、岩、浅瀬、航法パイロン、供給物資、遮蔽物のプロシージャル配置 |
-| `HudController.ts` | Presentation | DOM上の状態パネル更新、照準、残存人数、体力、弾薬、嵐タイマー、ミニマップ |
-| `InputManager.ts` | Input | 意味的操作（move、look、jump、sprint、fire、interact）とポインタロックの管理 |
+| 1 | `CharacterRig` + `CameraController` | キャラクターが後方カメラで表示され、カメラがOrbitする |
+| 2 | `InputManager` + `PlayerController` | WASD斜め移動、移動方向への自然な回転、加速と減速 |
+| 3 | `PlayerController` | Shift走行、Spaceジャンプ、重力、着地、C/Ctrlしゃがみと低い当たり判定 |
+| 4 | `AnimationController` | Idle/Walk/Run/Jump/Fall/Land/Crouch Idle/Crouch Walk/Aim/Fireの状態遷移 |
+| 5 | `WeaponSystem` | 右クリック照準、左クリック射撃、弾数、マガジン、Rリロード、マズルフラッシュ、命中判定 |
+| 6 | `HealthState` + `EnemyAgent` | HP100、被弾、発見、接近、攻撃、死亡、残存人数更新 |
+| 7 | `WorldBuilder` | 草原、丘、木、岩、建物、道、高低差、障害物を探索可能な3D空間へ配置 |
+| 8 | `HudController` | HP、武器、残弾、クロスヘア、照準・移動状態、敵数を表示 |
+| 9 | `TuningProfile` | 移動速度、加速度、方向転換、ジャンプ高度、重力、カメラ感度、射撃感覚を一元調整 |
 
-## Data and State
+## Data Contracts
 
-`GameWorld` は `playing`、`victory`、`defeat` の明示的な試合状態を持つ。プレイヤーとNPCは `Health` コンポーネントによりHPとシールドを共有し、ダメージは単一の `applyDamage` 経路を通す。HUDにはゲーム状態の読み取り専用スナップショットだけを渡し、DOM更新がゲーム規則を変更しないようにする。
+`InputSnapshot`は`moveX/moveY/lookX/lookY/jumpPressed/sprint/crouch/aim/fire/reloadPressed`を持ち、ゲームロジックはDOMイベントを直接参照しない。`PlayerState`は位置、速度、垂直速度、接地、しゃがみ、照準、アニメーション状態、HealthStateを持つ。`WeaponState`はmagazine、reserve、cooldown、reloadTimer、isReloadingを持つ。`EnemyState`は`idle/search/chase/attack/hurt/dead`を持つ。`HudSnapshot`は表示専用で、DOMからゲーム状態を変更できない。
 
-## Frame Order
+## Update Order
 
-各フレームでは、入力をサンプリングし、プレイヤー移動、NPCの意思決定、弾丸更新、補給物資の接近回収、嵐の縮小とダメージ、勝敗判定、HUDスナップショット更新の順で実行する。視覚効果はこの結果を読むだけで、ゲーム規則を持たない。
+毎フレーム、`InputManager.sample()`、`PlayerController.update()`、`CameraController.update()`、`AnimationController.update()`、`WeaponSystem.update()`、`EnemyDirector.update()`、`ProjectileSystem.update()`、`PickupSystem.update()`、`StormSystem.update()`、`HudController.render()`の順で実行する。`GameWorld`はこの順序を調停し、個別システムの内部規則を持たない。
 
-## Asset Hints
+## Cleanup and Fallback
 
-砂岩・玄武岩・土・浅瀬の世界はプロシージャル地形と `stormfall-terrain-atlas` の質感を中心に構築する。 `stormfall-logo` はDOMの開始画面とfaviconで使い、 `stormfall-supply-beacon` は琥珀の浮遊ビーコンを設計するための視覚基準にする。敵、プレイヤー、岩、パイロンは読み取りやすさとパフォーマンスを優先してプリミティブを組み合わせた独自ジオメトリで構築する。
-
-## Cleanup Contract
-
-`createGameScene` は `{ scene, dispose }` を返す。`dispose` は `GameWorld` のリスナー、DOM HUD、ポインタロック状態、オーディオノード、Babylonシーンを順番に解放する。`GameCanvas` はReact StrictModeの二重マウントを防ぎ、ResizeListenerとEngineを必ず破棄する。
-
-## 添付TPS仕様の責務拡張
-
-`InputManager` はキーボード、マウス、ポインターロックを所有し、WASD、Shift、Space、C/Ctrl、右クリック、左クリック、Rをフレーム単位のスナップショットへ正規化する。`GameWorld` はカメラのyaw／pitch、加速度付き移動、方向転換、ジャンプと重力、しゃがみ、状態遷移、射撃、リロード、ダメージ、敵AIを所有する。`Combatant` は生成キャラクターのレンダー表示と、方向転換・歩行・走行・ジャンプ・しゃがみ・射撃に対応する階層メッシュの動きを所有する。`GameCanvas` はゲームキャンバスとHUDのDOMフレームだけを持ち、状態値はGameWorldからID参照で更新する。
-
-カメラはプレイヤー後方からのOrbit形式とし、照準中は肩越し距離へ補間する。障害物との線分距離を検査して、安全位置へ補正する。ブラウザのポインターロックはInputManagerが要求し、dispose時にイベントを解除する。生成レンダーが未読込みまたは失敗した場合は、同じCombatant階層の手続き3Dモデルを表示する。
+各システムは`dispose()`を実装し、InputManagerのWindow／Canvas／PointerLockイベント、タイマー、Babylonメッシュ、HUD参照を解放する。生成キャラクターレンダーが未読込みでも、CharacterRigの手続きメッシュを表示してゲーム操作を止めない。`?demo`はInputManagerを迂回せず、同じInputSnapshot契約へ自動入力を注入する。
