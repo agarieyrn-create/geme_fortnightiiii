@@ -16,8 +16,8 @@ export class CameraController {
   }
 
   look(deltaX: number, deltaY: number) {
-    this.yaw -= deltaX * 0.0023;
-    this.pitch = Math.max(-0.72, Math.min(0.28, this.pitch - deltaY * 0.00185));
+    this.yaw -= deltaX * 0.0021;
+    this.pitch = Math.max(-0.72, Math.min(0.3, this.pitch - deltaY * 0.0017));
   }
 
   setYaw(nextYaw: number) {
@@ -33,8 +33,8 @@ export class CameraController {
     const forward = this.forward();
     const shoulder = new Vector3(Math.cos(this.yaw) * (aiming ? 0.82 : 1.25), 0, -Math.sin(this.yaw) * (aiming ? 0.82 : 1.25));
     const target = targetPosition.add(new Vector3(0, crouching ? 1.0 : 1.42, 0));
-    const distance = aiming ? 4.65 : 7.2;
-    const desired = target.subtract(forward.scale(distance)).add(new Vector3(0, (aiming ? 2.65 : 3.5) + this.pitch * 2.2, 0)).add(shoulder);
+    const distance = aiming ? 4.65 : 7.4;
+    const desired = target.subtract(forward.scale(distance)).add(new Vector3(0, (aiming ? 2.65 : 3.7) + this.pitch * 2.2, 0)).add(shoulder);
     let safePosition = desired.clone();
     const segment = desired.subtract(target);
     this.obstacles.forEach((obstacle) => {
@@ -48,7 +48,7 @@ export class CameraController {
         safePosition.y = Math.max(target.y + 0.35, safePosition.y);
       }
     });
-    this.camera.position = Vector3.Lerp(this.camera.position, safePosition, 1 - Math.exp(-delta * 18));
+    this.camera.position = Vector3.Lerp(this.camera.position, safePosition, 1 - Math.exp(-delta * 10));
     this.camera.setTarget(target.add(forward.scale(aiming ? 6 : 8)).add(new Vector3(0, this.pitch * 4, 0)));
   }
 }

@@ -15,6 +15,7 @@ import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { InputManager, type InputSnapshot } from "./InputManager";
+import { TouchInputManager } from "./TouchInputManager";
 import { CameraController } from "./CameraController";
 import { PlayerController } from "./PlayerController";
 import { WeaponSystem } from "./WeaponSystem";
@@ -345,6 +346,7 @@ export class GameWorld {
   readonly rivals: Rival[] = [];
   private readonly enemyDirector = new EnemyDirector<Rival, GameWorld>(this.rivals);
   readonly input: InputManager;
+  readonly touchInput: TouchInputManager;
   readonly camera: UniversalCamera;
   private readonly worldBuilder = new WorldBuilder();
   readonly obstacles: Obstacle[] = this.worldBuilder.obstacles;
@@ -396,6 +398,7 @@ export class GameWorld {
     this.buildEnvironment();
 
     this.input = new InputManager(canvas);
+    this.touchInput = new TouchInputManager(canvas);
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout("kairo");
     if (options.step === "full") this.player.setPortrait("kairo");
@@ -488,6 +491,7 @@ export class GameWorld {
 
   dispose() {
     this.input.dispose();
+    this.touchInput.dispose();
     this.player.dispose();
     this.enemyDirector.dispose();
     this.pickups.forEach((pickup) => pickup.root.dispose(false, true));
@@ -817,7 +821,7 @@ export class GameWorld {
   }
 
   private updatePlayer(delta: number) {
-    const rawSnapshot = this.options.demo ? this.demoInput() : this.input.snapshot();
+    const rawSnapshot = this.options.demo ? this.demoInput() : this.touchInput.isActive() ? this.touchInput.snapshot() : this.input.snapshot();
     const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : rawSnapshot;
     this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.spawnProjectile(origin, direction, "player", 25), (message) => this.pushEvent(message));
     this.currentAiming = this.playerController.aiming;

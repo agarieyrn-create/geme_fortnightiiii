@@ -93,6 +93,15 @@ export default function GameCanvas() {
         className="stormfall-canvas"
         style={{ touchAction: "none" }}
       />
+      <div className="touch-controls" aria-label="モバイル操作">
+        <div className="touch-stick" aria-hidden="true"><div id="touch-knob" className="touch-knob" /></div>
+        <span className="touch-swipe-hint">SWIPE TO LOOK</span>
+        <div className="touch-actions">
+          <button type="button" data-touch-action="jump">JUMP</button>
+          <button type="button" data-touch-action="crouch">CROUCH</button>
+          <button type="button" data-touch-action="sprint">RUN</button>
+        </div>
+      </div>
 
       <div id="hud" className="stormfall-hud step1-hud" aria-live="polite">
         <header className="hud-topbar">
