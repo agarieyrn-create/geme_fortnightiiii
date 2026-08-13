@@ -8,6 +8,20 @@ const LOGO_URL = "/manus-storage/stormfall-logo-fixed_bf9eea9a.png";
 const REFERENCE_URL = "/manus-storage/stormfall-reference_00af8a30.png";
 const BEACON_URL = "/manus-storage/stormfall-supply-beacon-fixed_fefc7346.png";
 
+const AVATARS = [
+  { id: "kairo", name: "KAIRO", role: "RIFT RANGER", image: "/manus-storage/stormfall-player-anchor_21f4d359.png" },
+  { id: "haze", name: "HAZE", role: "STORM SCOUT", image: "/manus-storage/stormfall-haze-final_4236e3e5.png" },
+  { id: "vanta", name: "VANTA", role: "FIELD ENGINEER", image: "/manus-storage/stormfall-vanta-final_dc45be78.png" },
+] as const;
+
+const RIVALS = [
+  { name: "RUSTJAW", image: "/manus-storage/stormfall-rustjaw-final_97dfa9cd.png" },
+  { name: "VEIL", image: "/manus-storage/stormfall-veil-final_829eb401.png" },
+  { name: "ANKER", image: "/manus-storage/stormfall-anker-final_a22065d6.png" },
+] as const;
+
+type AvatarId = (typeof AVATARS)[number]["id"];
+
 export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const startedRef = useRef(false);
@@ -16,6 +30,7 @@ export default function GameCanvas() {
     typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
   const [started, setStarted] = useState(isDemo);
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
+  const [avatar, setAvatar] = useState<AvatarId>("kairo");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -62,6 +77,11 @@ export default function GameCanvas() {
     handleRef.current?.start();
     void canvasRef.current?.requestPointerLock?.();
     setStarted(true);
+  };
+
+  const selectAvatar = (nextAvatar: AvatarId) => {
+    setAvatar(nextAvatar);
+    handleRef.current?.setAvatar(nextAvatar);
   };
 
   return (
@@ -136,7 +156,21 @@ export default function GameCanvas() {
             <button type="button" className="launch-button" onClick={beginMatch}>降下を開始 <span>↗</span></button>
             <p className="launch-note">ソロ・サンドボックス — 4名の自律ライバルと対戦</p>
           </div>
-          <div className="launch-rule" />
+          <aside className="avatar-chooser" aria-label="降下アバター選択">
+            <div className="chooser-heading"><span>DEPLOYMENT LOADOUT</span><strong>アバターを選択</strong></div>
+            <div className="avatar-grid">
+              {AVATARS.map((option) => (
+                <button key={option.id} type="button" className={`avatar-card ${avatar === option.id ? "selected" : ""}`} onClick={() => selectAvatar(option.id)} aria-pressed={avatar === option.id}>
+                  <img src={option.image} alt={`${option.name} の3Dアバター`} />
+                  <span>{option.name}</span><small>{option.role}</small>
+                </button>
+              ))}
+            </div>
+            <div className="rival-roster">
+              <div><span>THREAT ROSTER</span><b>現地ライバル</b></div>
+              <ul>{RIVALS.map((rival) => <li key={rival.name}><img src={rival.image} alt="" /><span>{rival.name}</span></li>)}</ul>
+            </div>
+          </aside>
         </section>
       )}
 

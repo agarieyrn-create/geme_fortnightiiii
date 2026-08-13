@@ -26,6 +26,17 @@
 |---|---|---|---|
 | stormfall-supply-beacon | 琥珀の信号灯とティール色ホログラムを持つ補給カプセルの視覚参照 | 高さ 1.6m、幅 1.2m | `/manus-storage/stormfall-supply-beacon-fixed_fefc7346.png` |
 
+## Character Renders
+
+| Name | Description | Size | Image |
+|---|---|---|---|
+| kairo | タン色の探検コートとティールの腕甲を備えたリフトレンジャー | 3:4、フルボディ | `/manus-storage/stormfall-player-anchor_21f4d359.png` |
+| haze | ティールの肩甲と灰色フィールドジャケットを着たストームスカウト | 3:4、フルボディ | `/manus-storage/stormfall-haze-final_4236e3e5.png` |
+| vanta | オフホワイトのポンチョと機械腕を持つフィールドエンジニア | 3:4、フルボディ | `/manus-storage/stormfall-vanta-final_dc45be78.png` |
+| rustjaw | 錆赤のサルベージ装甲と銅の顎部を持つ敵対ライバル | 3:4、フルボディ | `/manus-storage/stormfall-rustjaw-final_97dfa9cd.png` |
+| veil | 深紅のケープと狙撃装備を持つ敵対インフィルトレーター | 3:4、フルボディ | `/manus-storage/stormfall-veil-final_829eb401.png` |
+| anker | 橙色のサバイバルクロークと前腕シールドを持つ敵対ブルワーク | 3:4、フルボディ | `/manus-storage/stormfall-anker-final_a22065d6.png` |
+
 ## Procedural Geometry
 
 | Name | Description | Size | Visual role |

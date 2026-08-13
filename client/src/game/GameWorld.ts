@@ -8,6 +8,8 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Scene } from "@babylonjs/core/scene";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
@@ -17,8 +19,26 @@ import { InputManager, type InputSnapshot } from "./InputManager";
 const TEAL = new Color3(0.075, 0.85, 0.77);
 const AMBER = new Color3(1, 0.54, 0.15);
 const SAND = new Color3(0.31, 0.12, 0.035);
-const BASALT = new Color3(0.06, 0.085, 0.115);
+const BASALT = new Color3(0.12, 0.055, 0.023);
 const RUST = new Color3(0.77, 0.16, 0.1);
+
+const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: Color3; cloak: Color3; scale: number }> = {
+  kairo: { suit: new Color3(0.14, 0.18, 0.23), armor: new Color3(0.39, 0.29, 0.18), accent: TEAL, cloak: new Color3(0.34, 0.25, 0.15), scale: 1 },
+  haze: { suit: new Color3(0.11, 0.16, 0.22), armor: new Color3(0.17, 0.35, 0.4), accent: new Color3(0.06, 0.84, 0.77), cloak: new Color3(0.12, 0.27, 0.34), scale: 0.9 },
+  vanta: { suit: new Color3(0.06, 0.08, 0.11), armor: new Color3(0.62, 0.58, 0.5), accent: new Color3(0.1, 0.76, 0.86), cloak: new Color3(0.58, 0.55, 0.48), scale: 1.08 },
+  rustjaw: { suit: new Color3(0.11, 0.055, 0.045), armor: new Color3(0.46, 0.075, 0.035), accent: new Color3(0.96, 0.08, 0.04), cloak: new Color3(0.27, 0.04, 0.025), scale: 1.2 },
+  veil: { suit: new Color3(0.11, 0.08, 0.14), armor: new Color3(0.3, 0.045, 0.11), accent: new Color3(0.95, 0.1, 0.08), cloak: new Color3(0.25, 0.02, 0.08), scale: 0.86 },
+  anker: { suit: new Color3(0.1, 0.09, 0.08), armor: new Color3(0.56, 0.18, 0.04), accent: new Color3(0.97, 0.14, 0.04), cloak: new Color3(0.39, 0.105, 0.02), scale: 1.24 },
+};
+
+const CHARACTER_RENDERS: Record<string, string> = {
+  kairo: "/manus-storage/stormfall-player-anchor_21f4d359.png",
+  haze: "/manus-storage/stormfall-haze-final_4236e3e5.png",
+  vanta: "/manus-storage/stormfall-vanta-final_dc45be78.png",
+  rustjaw: "/manus-storage/stormfall-rustjaw-final_97dfa9cd.png",
+  veil: "/manus-storage/stormfall-veil-final_829eb401.png",
+  anker: "/manus-storage/stormfall-anker-final_a22065d6.png",
+};
 
 export type MatchOutcome = "victory" | "defeat";
 export type WorldOptions = { demo: boolean; onResult: (outcome: MatchOutcome) => void };
@@ -43,6 +63,12 @@ class Combatant {
   readonly root: TransformNode;
   readonly body: Mesh;
   readonly halo: Mesh;
+  private portrait?: Mesh;
+  private portraitMaterial?: StandardMaterial;
+  private readonly bodyMaterial: StandardMaterial;
+  private readonly armorMaterial: StandardMaterial;
+  private readonly accentMaterial: StandardMaterial;
+  private readonly cloakMaterial: StandardMaterial;
   hp = 100;
   shield = 50;
   alive = true;
@@ -58,41 +84,123 @@ class Combatant {
   ) {
     this.root = new TransformNode(`${id}-root`, scene);
     this.root.position.copyFrom(position);
-    this.body = MeshBuilder.CreateCapsule(`${id}-body`, { height: 2.25, radius: 0.43, tessellation: 10 }, scene);
+    this.body = MeshBuilder.CreateCapsule(`${id}-body`, { height: 1.18, radius: 0.32, tessellation: 12 }, scene);
     this.body.parent = this.root;
-    this.body.position.y = 1.1;
-    const bodyMat = new StandardMaterial(`${id}-mat`, scene);
-    bodyMat.diffuseColor = color;
-    bodyMat.specularColor = new Color3(0.08, 0.08, 0.08);
-    this.body.material = bodyMat;
+    this.body.position.y = 1.28;
+    this.bodyMaterial = new StandardMaterial(`${id}-mat`, scene);
+    this.bodyMaterial.diffuseColor = color;
+    this.bodyMaterial.specularColor = new Color3(0.08, 0.08, 0.08);
+    this.body.material = this.bodyMaterial;
+    this.armorMaterial = new StandardMaterial(`${id}-armor-mat`, scene);
+    this.armorMaterial.diffuseColor = enemy ? RUST : TEAL.scale(0.5);
+    this.armorMaterial.specularColor = new Color3(0.16, 0.16, 0.16);
+    this.accentMaterial = new StandardMaterial(`${id}-accent-mat`, scene);
+    this.accentMaterial.diffuseColor = enemy ? new Color3(0.95, 0.08, 0.04) : TEAL;
+    this.accentMaterial.emissiveColor = this.accentMaterial.diffuseColor.scale(0.45);
+    this.accentMaterial.disableLighting = true;
+    this.cloakMaterial = new StandardMaterial(`${id}-cloak-mat`, scene);
+    this.cloakMaterial.diffuseColor = color.scale(0.72);
+    this.cloakMaterial.specularColor = Color3.Black();
 
-    const chest = MeshBuilder.CreateBox(`${id}-chest`, { width: 0.76, height: 0.48, depth: 0.46 }, scene);
+    const chest = MeshBuilder.CreateBox(`${id}-chest`, { width: 0.72, height: 0.5, depth: 0.4 }, scene);
     chest.parent = this.root;
-    chest.position.y = 1.2;
-    chest.position.z = -0.34;
-    const chestMat = new StandardMaterial(`${id}-chest-mat`, scene);
-    chestMat.diffuseColor = enemy ? RUST : TEAL;
-    chestMat.emissiveColor = enemy ? RUST.scale(0.22) : TEAL.scale(0.22);
-    chest.material = chestMat;
+    chest.position.y = 1.37;
+    chest.position.z = -0.28;
+    chest.material = this.armorMaterial;
+
+    const head = MeshBuilder.CreateSphere(`${id}-head`, { diameter: 0.53, segments: 14 }, scene);
+    head.parent = this.root;
+    head.position.set(0, 2.03, 0);
+    const skinMat = new StandardMaterial(`${id}-skin-mat`, scene);
+    skinMat.diffuseColor = enemy ? new Color3(0.31, 0.16, 0.09) : new Color3(0.46, 0.27, 0.16);
+    head.material = skinMat;
+    const hair = MeshBuilder.CreateSphere(`${id}-hair`, { diameter: 0.56, segments: 12 }, scene);
+    hair.parent = this.root;
+    hair.position.set(0, 2.16, 0.015);
+    hair.scaling.set(1.04, 0.44, 1.02);
+    const hairMat = new StandardMaterial(`${id}-hair-mat`, scene);
+    hairMat.diffuseColor = enemy ? new Color3(0.06, 0.02, 0.02) : new Color3(0.025, 0.03, 0.045);
+    hair.material = hairMat;
+    const neck = MeshBuilder.CreateCylinder(`${id}-neck`, { height: 0.22, diameter: 0.2, tessellation: 10 }, scene);
+    neck.parent = this.root;
+    neck.position.set(0, 1.78, 0);
+    neck.material = skinMat;
+
+    this.addLimb("arm-l", -0.48, 1.43, -0.02, -0.18, this.bodyMaterial);
+    this.addLimb("arm-r", 0.48, 1.43, -0.02, 0.18, this.bodyMaterial);
+    this.addLimb("leg-l", -0.21, 0.48, 0.03, 0, this.bodyMaterial, 0.96);
+    this.addLimb("leg-r", 0.21, 0.48, 0.03, 0, this.bodyMaterial, 0.96);
+    this.addArmorPart("boot-l", -0.21, 0.09, -0.08, 0.28, 0.2, 0.43, this.armorMaterial);
+    this.addArmorPart("boot-r", 0.21, 0.09, -0.08, 0.28, 0.2, 0.43, this.armorMaterial);
+    this.addArmorPart("knee-l", -0.21, 0.53, -0.14, 0.23, 0.27, 0.13, this.armorMaterial);
+    this.addArmorPart("knee-r", 0.21, 0.53, -0.14, 0.23, 0.27, 0.13, this.armorMaterial);
+    this.addArmorPart("shoulder-l", -0.5, 1.71, -0.02, 0.4, 0.22, 0.5, this.armorMaterial);
+    this.addArmorPart("shoulder-r", 0.5, 1.71, -0.02, 0.4, 0.22, 0.5, this.armorMaterial);
+    this.addArmorPart("backpack", 0, 1.27, 0.38, 0.56, 0.62, 0.27, this.armorMaterial);
+    this.addArmorPart("gauntlet-l", -0.58, 1.2, -0.05, 0.25, 0.54, 0.26, this.accentMaterial);
+    this.addArmorPart("gauntlet-r", 0.58, 1.2, -0.05, 0.25, 0.54, 0.26, this.armorMaterial);
+    const cape = MeshBuilder.CreateBox(`${id}-cape`, { width: 0.9, height: 1.03, depth: 0.075 }, scene);
+    cape.parent = this.root;
+    cape.position.set(0, 1.23, 0.37);
+    cape.material = this.cloakMaterial;
+    this.createWeapon();
 
     const visor = MeshBuilder.CreateSphere(`${id}-visor`, { diameter: 0.34, segments: 10 }, scene);
     visor.parent = this.root;
     visor.position.y = 1.76;
     visor.position.z = -0.39;
-    const visorMat = new StandardMaterial(`${id}-visor-mat`, scene);
-    visorMat.emissiveColor = enemy ? new Color3(1, 0.12, 0.06) : TEAL;
-    visorMat.disableLighting = true;
-    visor.material = visorMat;
+    visor.material = this.accentMaterial;
 
     this.halo = MeshBuilder.CreateTorus(`${id}-halo`, { diameter: 1.06, thickness: 0.035, tessellation: 28 }, scene);
     this.halo.parent = this.root;
     this.halo.rotation.x = Math.PI / 2;
     this.halo.position.y = 0.08;
-    const haloMat = new StandardMaterial(`${id}-halo-mat`, scene);
-    haloMat.emissiveColor = enemy ? RUST : TEAL;
-    haloMat.alpha = 0.68;
-    haloMat.disableLighting = true;
-    this.halo.material = haloMat;
+    this.halo.material = this.accentMaterial;
+  }
+
+  applyLoadout(loadoutId: string) {
+    const loadout = CHARACTER_LOADOUTS[loadoutId];
+    if (!loadout) return;
+    this.bodyMaterial.diffuseColor.copyFrom(loadout.suit);
+    this.armorMaterial.diffuseColor.copyFrom(loadout.armor);
+    this.accentMaterial.diffuseColor.copyFrom(loadout.accent);
+    this.accentMaterial.emissiveColor.copyFrom(loadout.accent.scale(0.46));
+    this.cloakMaterial.diffuseColor.copyFrom(loadout.cloak);
+    this.root.scaling.setAll(loadout.scale);
+  }
+
+  setPortrait(renderId: string) {
+    const url = CHARACTER_RENDERS[renderId];
+    if (!url) return;
+    if (!this.portrait) {
+      this.portrait = MeshBuilder.CreatePlane(`${this.id}-portrait`, { width: 2.5, height: 3.75, sideOrientation: Mesh.DOUBLESIDE }, this.scene);
+      this.portrait.parent = this.root;
+      this.portrait.position.y = 1.72;
+      this.portrait.scaling.y = -1;
+      this.portrait.billboardMode = Mesh.BILLBOARDMODE_ALL;
+      this.portrait.setEnabled(false);
+      this.portraitMaterial = new StandardMaterial(`${this.id}-portrait-mat`, this.scene);
+      this.portraitMaterial.backFaceCulling = false;
+      this.portraitMaterial.useAlphaFromDiffuseTexture = true;
+      this.portraitMaterial.disableLighting = true;
+      this.portraitMaterial.emissiveColor = new Color3(0.88, 0.94, 0.96);
+      this.portrait.material = this.portraitMaterial;
+    }
+    const texture = new Texture(url, this.scene, true, false, Texture.TRILINEAR_SAMPLINGMODE, undefined, () => {
+      this.portrait?.setEnabled(false);
+      this.root.getChildMeshes().forEach((mesh) => {
+        if (mesh !== this.portrait) mesh.setEnabled(true);
+      });
+    });
+    texture.hasAlpha = true;
+    texture.onLoadObservable.addOnce(() => {
+      this.root.getChildMeshes().forEach((mesh) => {
+        if (mesh !== this.portrait) mesh.setEnabled(false);
+      });
+      this.portrait?.setEnabled(true);
+    });
+    this.portraitMaterial!.diffuseTexture = texture;
+    this.portraitMaterial!.opacityTexture = texture;
   }
 
   applyDamage(amount: number) {
@@ -114,12 +222,41 @@ class Combatant {
   updateVisual(delta: number) {
     this.flash = Math.max(0, this.flash - delta);
     this.halo.scaling.setAll(1 + Math.sin(performance.now() * 0.005) * 0.035);
-    const material = this.body.material as StandardMaterial;
-    material.emissiveColor = this.flash > 0 ? new Color3(0.9, 0.9, 0.9) : Color3.Black();
+    this.bodyMaterial.emissiveColor = this.flash > 0 ? new Color3(0.9, 0.9, 0.9) : Color3.Black();
   }
 
   dispose() {
     this.root.dispose(false, true);
+  }
+
+  private addLimb(name: string, x: number, y: number, z: number, tilt: number, material: StandardMaterial, height = 0.92) {
+    const limb = MeshBuilder.CreateCapsule(`${this.id}-${name}`, { height, radius: 0.145, tessellation: 10 }, this.scene);
+    limb.parent = this.root;
+    limb.position.set(x, y, z);
+    limb.rotation.z = tilt;
+    limb.material = material;
+  }
+
+  private addArmorPart(name: string, x: number, y: number, z: number, width: number, height: number, depth: number, material: StandardMaterial) {
+    const part = MeshBuilder.CreateBox(`${this.id}-${name}`, { width, height, depth }, this.scene);
+    part.parent = this.root;
+    part.position.set(x, y, z);
+    part.material = material;
+  }
+
+  private createWeapon() {
+    const weapon = new TransformNode(`${this.id}-weapon`, this.scene);
+    weapon.parent = this.root;
+    weapon.position.set(0.72, 1.14, -0.35);
+    weapon.rotation.z = Math.PI / 2.8;
+    const body = MeshBuilder.CreateBox(`${this.id}-weapon-body`, { width: 0.7, height: 0.18, depth: 0.18 }, this.scene);
+    body.parent = weapon;
+    body.material = this.armorMaterial;
+    const barrel = MeshBuilder.CreateCylinder(`${this.id}-weapon-barrel`, { height: 0.52, diameter: 0.08, tessellation: 8 }, this.scene);
+    barrel.parent = weapon;
+    barrel.rotation.z = Math.PI / 2;
+    barrel.position.x = 0.45;
+    barrel.material = this.accentMaterial;
   }
 }
 
@@ -187,6 +324,9 @@ export class GameWorld {
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
     scene.ambientColor = new Color3(0.14, 0.18, 0.25);
+    scene.fogMode = Scene.FOGMODE_EXP2;
+    scene.fogColor = new Color3(0.035, 0.07, 0.12);
+    scene.fogDensity = 0.0085;
     new HemisphericLight("sky-hemisphere", new Vector3(0.15, 1, 0.1), scene).intensity = 0.88;
     const sun = new DirectionalLight("low-sun", new Vector3(-0.36, -0.72, 0.38), scene);
     sun.position = new Vector3(42, 72, -35);
@@ -195,11 +335,14 @@ export class GameWorld {
     this.terrainMaterial = new StandardMaterial("sandstone-terrain", scene);
     this.terrainMaterial.diffuseColor = SAND;
     this.terrainMaterial.specularColor = new Color3(0.04, 0.035, 0.025);
-    this.terrainMaterial.emissiveColor = new Color3(0.014, 0.004, 0.001);
+    this.terrainMaterial.diffuseTexture = this.createTerrainTexture();
+    this.terrainMaterial.emissiveColor = new Color3(0.006, 0.001, 0);
     this.buildEnvironment();
 
     this.input = new InputManager(canvas);
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
+    this.player.applyLoadout("kairo");
+    this.player.setPortrait("kairo");
     this.player.shield = 65;
     this.createRivals();
     this.createPickups();
@@ -220,6 +363,13 @@ export class GameWorld {
     this.mode = "playing";
     this.announcement = "裂け目への降下を確認";
     this.pushEvent("エリア RIFT-07 に着地");
+  }
+
+  setPlayerAvatar(avatarId: string) {
+    if (this.mode !== "briefing") return;
+    this.player.applyLoadout(avatarId);
+    this.player.setPortrait(avatarId);
+    this.announcement = `${avatarId.toUpperCase()} の降下準備完了`;
   }
 
   update(delta: number) {
@@ -274,6 +424,7 @@ export class GameWorld {
   private buildEnvironment() {
     const ground = MeshBuilder.CreateGround("rift-island", { width: 220, height: 220, subdivisions: 40 }, this.scene);
     ground.material = this.terrainMaterial;
+    this.createTerrainScars();
     const edge = MeshBuilder.CreateTorus("island-edge", { diameter: 216, thickness: 0.42, tessellation: 96 }, this.scene);
     edge.rotation.x = Math.PI / 2;
     edge.position.y = 0.16;
@@ -302,12 +453,13 @@ export class GameWorld {
   }
 
   private createBoulder(index: number, x: number, z: number, size: number) {
-    const boulder = MeshBuilder.CreateSphere(`basalt-${index}`, { diameter: size, segments: 9 }, this.scene);
+    const boulder = MeshBuilder.CreateIcoSphere(`basalt-${index}`, { radius: size * 0.56, subdivisions: 2 }, this.scene);
     boulder.position.set(x, size * 0.36, z);
-    boulder.scaling.set(1.25, 0.72, 0.84);
+    boulder.scaling.set(1.32, 0.74, 0.88);
     boulder.rotation.set(index * 0.29, index * 0.77, index * 0.13);
     const material = new StandardMaterial(`basalt-mat-${index}`, this.scene);
-    material.diffuseColor = BASALT.add(new Color3(index * 0.006, 0.008, 0.012));
+    material.diffuseColor = BASALT.add(new Color3(index * 0.011, 0.006, 0.004));
+    material.emissiveColor = new Color3(0.012, 0.003, 0.001);
     material.specularColor = Color3.Black();
     boulder.material = material;
     this.obstacles.push({ position: new Vector3(x, 0, z), radius: size * 0.68 });
@@ -369,9 +521,73 @@ export class GameWorld {
     });
   }
 
+  private createTerrainTexture() {
+    const texture = new DynamicTexture("sandstone-field-texture", { width: 1024, height: 1024 }, this.scene, false);
+    const context = texture.getContext();
+    context.fillStyle = "#6f3513";
+    context.fillRect(0, 0, 1024, 1024);
+    for (let index = 0; index < 42; index += 1) {
+      const x = (index * 197) % 1024;
+      const y = (index * 431) % 1024;
+      const radius = 34 + ((index * 29) % 80);
+      const gradient = context.createRadialGradient(x, y, 2, x, y, radius);
+      gradient.addColorStop(0, index % 3 === 0 ? "rgba(204,121,48,.32)" : "rgba(51,20,8,.26)");
+      gradient.addColorStop(1, "rgba(0,0,0,0)");
+      context.fillStyle = gradient;
+      context.beginPath();
+      context.arc(x, y, radius, 0, Math.PI * 2);
+      context.fill();
+    }
+    context.lineWidth = 3;
+    for (let index = 0; index < 95; index += 1) {
+      const x = (index * 73) % 1024;
+      const y = (index * 181) % 1024;
+      context.strokeStyle = index % 2 === 0 ? "rgba(38,13,6,.38)" : "rgba(225,137,58,.18)";
+      context.beginPath();
+      context.moveTo(x, y);
+      context.lineTo(x + 18 + ((index * 11) % 47), y + ((index * 17) % 36) - 18);
+      context.stroke();
+    }
+    texture.uScale = 5.4;
+    texture.vScale = 5.4;
+    texture.update(false);
+    return texture;
+  }
+
+  private createTerrainScars() {
+    const scarMat = new StandardMaterial("terrain-scar-mat", this.scene);
+    scarMat.diffuseColor = new Color3(0.19, 0.055, 0.015);
+    scarMat.emissiveColor = new Color3(0.014, 0.002, 0);
+    scarMat.alpha = 0.72;
+    const strataMat = new StandardMaterial("strata-mat", this.scene);
+    strataMat.diffuseColor = new Color3(0.34, 0.12, 0.032);
+    strataMat.specularColor = Color3.Black();
+    for (let index = 0; index < 18; index += 1) {
+      const angle = index * 2.399;
+      const radius = 17 + (index % 5) * 14;
+      const patch = MeshBuilder.CreateDisc(`erosion-scar-${index}`, { radius: 3.4 + (index % 4) * 1.5, tessellation: 9 }, this.scene);
+      patch.rotation.x = Math.PI / 2;
+      patch.rotation.z = angle;
+      patch.position.set(Math.cos(angle) * radius, 0.022, Math.sin(angle) * radius);
+      patch.scaling.x = 1.9;
+      patch.material = scarMat;
+    }
+    for (let index = 0; index < 22; index += 1) {
+      const angle = index * 1.97;
+      const radius = 12 + (index % 6) * 13;
+      const rock = MeshBuilder.CreateCylinder(`strata-slab-${index}`, { height: 0.36 + (index % 3) * 0.25, diameterTop: 1.5 + (index % 4) * .55, diameterBottom: 1.85 + (index % 4) * .55, tessellation: 6 }, this.scene);
+      rock.position.set(Math.cos(angle) * radius, 0.18, Math.sin(angle) * radius);
+      rock.rotation.y = angle * 1.6;
+      rock.material = strataMat;
+    }
+  }
+
   private createRivals() {
     [new Vector3(-26, 0, 18), new Vector3(29, 0, 10), new Vector3(-10, 0, -34), new Vector3(37, 0, -39)].forEach((position, index) => {
       const rival = new Rival(this.scene, `rival-${index + 1}`, position);
+      const loadout = ["rustjaw", "veil", "anker", "rustjaw"][index];
+      rival.applyLoadout(loadout);
+      rival.setPortrait(loadout);
       rival.shield = 35 + index * 4;
       this.rivals.push(rival);
     });

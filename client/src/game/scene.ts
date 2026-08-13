@@ -6,6 +6,7 @@ import { GameWorld, type MatchOutcome, type WorldOptions } from "./GameWorld";
 export type GameHandle = {
   scene: Scene;
   start: () => void;
+  setAvatar: (avatarId: string) => void;
   dispose: () => void;
 };
 
@@ -21,10 +22,10 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement,
   return {
     scene,
     start: () => world.start(),
+    setAvatar: (avatarId) => world.setPlayerAvatar(avatarId),
     dispose: () => {
       world.dispose();
       scene.dispose();
     },
   };
 }
-
