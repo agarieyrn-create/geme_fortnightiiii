@@ -40,6 +40,8 @@ const MEDKIT_USE_TIME = 3;
 const ENEMY_ATTACK_RANGE = 25;
 const ENEMY_ATTACK_DAMAGE = 10;
 const ENEMY_ATTACK_INTERVAL = 1.15;
+// Test-only toggle: set false to restore the intended no-weapon scavenger start.
+const DEBUG_START_WITH_WEAPON = true;
 
 const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: Color3; cloak: Color3; scale: number }> = {
   kairo: { suit: new Color3(0.14, 0.18, 0.23), armor: new Color3(0.39, 0.29, 0.18), accent: TEAL, cloak: new Color3(0.34, 0.25, 0.15), scale: 1 },
@@ -560,8 +562,8 @@ export class GameWorld {
     scene.activeCamera = this.camera;
     this.cameraController = new CameraController(this.camera, this.obstacles);
     this.weaponSystem = new WeaponSystem();
-          if (options.step === "step3" || options.step === "full") {
-
+    const startsArmed = options.step === "step3" || options.step === "full" || (options.step === "step4" && DEBUG_START_WITH_WEAPON);
+    if (startsArmed) {
       this.weaponSystem.equip("assault", 120);
       this.player.setWeaponVisible(true);
     } else {
