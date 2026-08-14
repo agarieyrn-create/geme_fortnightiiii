@@ -51,7 +51,11 @@ export class TouchInputManager {
   }
 
   snapshot(): InputSnapshot {
-    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint, crouch: this.crouch, aiming: this.aiming, firing: this.firing, reloadPressed: this.reloadPressed, lookX: this.lookX, lookY: this.lookY };
+    // Mobile-only camera tuning: reverse horizontal swipe direction and amplify vertical look.
+    // PC mouse values remain untouched in InputManager.
+    const mobileYaw = -this.lookX;
+    const mobilePitch = this.lookY * 2.05;
+    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint, crouch: this.crouch, aiming: this.aiming, firing: this.firing, reloadPressed: this.reloadPressed, lookX: mobileYaw, lookY: mobilePitch };
     this.lookX = 0;
     this.lookY = 0;
     this.reloadPressed = false;
