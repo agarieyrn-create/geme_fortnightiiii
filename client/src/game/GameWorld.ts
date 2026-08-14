@@ -436,14 +436,16 @@ export class GameWorld {
   }
 
   private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3) {
-    const ray = new Ray(this.camera.position, cameraDirection.normalize(), 180);
+    const maxShootDistance = 250;
+    const direction = cameraDirection.normalize();
+    const ray = new Ray(this.camera.position, direction, maxShootDistance);
     const pick = this.scene.pickWithRay(ray, (mesh) => Boolean(mesh.metadata?.trainingTargetId));
-    const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(cameraDirection.normalize().scale(180));
+    const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(direction.scale(maxShootDistance));
     const shotDirection = aimPoint.subtract(origin).normalize();
     this.spawnProjectile(origin, shotDirection, "player", 25);
     this.playShotSound();
     this.cameraController.addRecoil(0.014);
-    const tracer = MeshBuilder.CreateLines("bullet-tracer", { points: [origin, origin.add(shotDirection.scale(4.2))] }, this.scene);
+    const tracer = MeshBuilder.CreateLines("bullet-tracer", { points: [origin, aimPoint] }, this.scene);
     tracer.color = TEAL;
     window.setTimeout(() => tracer.dispose(), 85);
   }
@@ -764,7 +766,8 @@ export class GameWorld {
   }
 
   private createTrainingTargets() {
-    const placements = [[-10, 18], [0, 12], [10, 18], [-18, 2], [18, 2]] as const;
+    // Near, medium and far lanes make the 250-unit camera ray easy to verify without moving the player.
+    const placements = [[-10, 18], [10, 20], [-18, 48], [18, 52], [0, 88]] as const;
     const bodyMat = new StandardMaterial("training-target-body", this.scene);
     bodyMat.diffuseColor = new Color3(0.12, 0.18, 0.2);
     const coreMat = new StandardMaterial("training-target-core", this.scene);

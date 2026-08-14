@@ -18,7 +18,8 @@ export class CameraController {
 
   look(deltaX: number, deltaY: number) {
     this.yaw -= deltaX * 0.0021;
-    this.pitch = Math.max(-0.72, Math.min(0.3, this.pitch - deltaY * 0.0017));
+    // Camera-only vertical look: clamp to roughly -60° / +70° so the player body never pitches.
+    this.pitch = Math.max(-1.05, Math.min(1.22, this.pitch - deltaY * 0.0017));
   }
 
   setYaw(nextYaw: number) {
@@ -59,6 +60,7 @@ export class CameraController {
       }
     });
     this.camera.position = Vector3.Lerp(this.camera.position, safePosition, 1 - Math.exp(-delta * 10));
-    this.camera.setTarget(target.add(forward.scale(aiming ? 2.5 : 8)).add(new Vector3(0, aiming ? 0.65 : (this.pitch - this.recoil) * 4, 0)));
+    const pitchLook = (this.pitch - this.recoil) * (aiming ? 4.6 : 4.2);
+    this.camera.setTarget(target.add(forward.scale(aiming ? 2.5 : 8)).add(new Vector3(0, pitchLook, 0)));
   }
 }

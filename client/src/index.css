@@ -119,3 +119,7 @@ button { font: inherit; }
 /* Hit feedback: the central reticle flashes red only when a projectile reaches a target. */
 .crosshair::before, .crosshair::after, .crosshair i, .crosshair b { transition: background-color .08s ease, box-shadow .08s ease; }
 .crosshair.hit::before, .crosshair.hit::after, .crosshair.hit i, .crosshair.hit b { background: #ff4d5e; box-shadow: 0 0 9px rgba(255, 77, 94, .92); }
+
+/* Game-state gate: controls stay mounted for the input adapter, but are invisible and untouchable outside active play. */
+.touch-controls.is-hidden { visibility: hidden; opacity: 0; pointer-events: none; }
+.touch-controls.is-playing { visibility: visible; opacity: 1; }

@@ -31,6 +31,7 @@ export default function GameCanvas() {
   const [started, setStarted] = useState(isDemo);
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [avatar, setAvatar] = useState<AvatarId>("kairo");
+  const gameState = outcome ? "gameover" : started ? "playing" : "menu";
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -93,7 +94,7 @@ export default function GameCanvas() {
         className="stormfall-canvas"
         style={{ touchAction: "none" }}
       />
-      <div className="touch-controls" aria-label="モバイル操作">
+      <div className={`touch-controls ${gameState === "playing" ? "is-playing" : "is-hidden"}`} aria-label="モバイル操作" aria-hidden={gameState !== "playing"}>
         <div className="touch-stick" aria-hidden="true"><div id="touch-knob" className="touch-knob" /></div>
         <span className="touch-swipe-hint">SWIPE TO LOOK</span>
         <div className="touch-actions">
