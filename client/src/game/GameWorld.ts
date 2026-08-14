@@ -1,4 +1,5 @@
 // Stormfall: Last Horizon design contract — readable arcade-sci-fi combat across warm sandstone, black basalt, and a teal storm ring.
+// Stormfall Visual Layer: warm adventure light, cool storm accents, readable low-poly materials, and quality-gated rendering stay separate from gameplay rules.
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Ray } from "@babylonjs/core/Culling/ray";
@@ -14,6 +15,9 @@ import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
+import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
+import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
 import { InputManager, type InputSnapshot } from "./InputManager";
 import { TouchInputManager } from "./TouchInputManager";
 import { CameraController } from "./CameraController";
@@ -24,7 +28,7 @@ import { AnimationController } from "./AnimationController";
 import { HumanoidModelController } from "./HumanoidModelController";
 import { EnemyDirector } from "./EnemyDirector";
 import { WorldBuilder } from "./WorldBuilder";
-import type { ProgressionData, TutorialKey } from "./Progression";
+import type { GraphicsQuality, ProgressionData, TutorialKey } from "./Progression";
 import { DUNGEON_CONFIGS, type DungeonId } from "./DungeonConfig";
 
 const TEAL = new Color3(0.075, 0.85, 0.77);
@@ -57,7 +61,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 
 export type MatchOutcome = "victory" | "defeat";
 export type DungeonSummary = { dungeonId: DungeonId; baseReward: number; bonusReward: number };
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; dungeonId: DungeonId; avatarId: string; progression: ProgressionData; debug: boolean; onTutorial: (key: TutorialKey, text: string, target: "move" | "look" | "aim" | "fire" | "pickup" | "jump") => void; onResult: (outcome: MatchOutcome, summary?: DungeonSummary) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; dungeonId: DungeonId; avatarId: string; progression: ProgressionData; graphicsQuality: GraphicsQuality; debug: boolean; onTutorial: (key: TutorialKey, text: string, target: "move" | "look" | "aim" | "fire" | "pickup" | "jump") => void; onResult: (outcome: MatchOutcome, summary?: DungeonSummary) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -106,6 +110,8 @@ class Combatant {
   private readonly animationController = new AnimationController();
   private readonly humanoid?: HumanoidModelController;
   private weaponMount?: TransformNode;
+  private readonly weaponVariants = new Map<import("./contracts").WeaponId, TransformNode>();
+  private activeWeaponStyle: import("./contracts").WeaponId = "assault";
   private aiming = false;
   private motionState = "IDLE";
   private poseTime = 0;
@@ -256,6 +262,11 @@ class Combatant {
     this.weaponMount?.setEnabled(visible);
   }
 
+  setWeaponStyle(style: import("./contracts").WeaponId) {
+    this.activeWeaponStyle = style;
+    this.weaponVariants.forEach((variant, id) => variant.setEnabled(id === style));
+  }
+
   applyLoadout(loadoutId: string) {
     const loadout = CHARACTER_LOADOUTS[loadoutId];
     if (!loadout) return;
@@ -266,6 +277,7 @@ class Combatant {
     this.cloakMaterial.diffuseColor.copyFrom(loadout.cloak);
     this.baseScale = loadout.scale;
     this.root.scaling.setAll(loadout.scale);
+    this.humanoid?.setPalette(loadout.suit, loadout.armor, loadout.accent, loadout.cloak);
   }
 
   applyDamage(amount: number) {
@@ -354,14 +366,51 @@ class Combatant {
     weapon.parent = this.root;
     weapon.position.set(0.72, 1.14, -0.35);
     weapon.rotation.z = Math.PI / 2.8;
-    const body = MeshBuilder.CreateBox(`${this.id}-weapon-body`, { width: 0.7, height: 0.18, depth: 0.18 }, this.scene);
-    body.parent = weapon;
+    this.createWeaponVariant(weapon, "assault", 0.68, 0.5, 0.2, true);
+    this.createWeaponVariant(weapon, "smg", 0.48, 0.32, 0.15, true);
+    this.createWeaponVariant(weapon, "shotgun", 0.76, 0.78, 0.24, false);
+    this.setWeaponStyle(this.activeWeaponStyle);
+  }
+
+  private createWeaponVariant(parent: TransformNode, id: import("./contracts").WeaponId, bodyLength: number, barrelLength: number, magazineLength: number, hasStock: boolean) {
+    const variant = new TransformNode(`${this.id}-${id}-weapon`, this.scene);
+    variant.parent = parent;
+    const body = MeshBuilder.CreateBox(`${this.id}-${id}-receiver`, { width: bodyLength, height: id === "shotgun" ? 0.22 : 0.18, depth: id === "shotgun" ? 0.2 : 0.16 }, this.scene);
+    body.parent = variant;
     body.material = this.armorMaterial;
-    const barrel = MeshBuilder.CreateCylinder(`${this.id}-weapon-barrel`, { height: 0.52, diameter: 0.08, tessellation: 8 }, this.scene);
-    barrel.parent = weapon;
+    const barrel = MeshBuilder.CreateCylinder(`${this.id}-${id}-barrel`, { height: barrelLength, diameter: id === "shotgun" ? 0.105 : 0.075, tessellation: 8 }, this.scene);
+    barrel.parent = variant;
     barrel.rotation.z = Math.PI / 2;
-    barrel.position.x = 0.45;
+    barrel.position.x = bodyLength * 0.5 + barrelLength * 0.5 - 0.05;
     barrel.material = this.accentMaterial;
+    const grip = MeshBuilder.CreateBox(`${this.id}-${id}-grip`, { width: 0.12, height: 0.27, depth: 0.13 }, this.scene);
+    grip.parent = variant;
+    grip.position.set(-0.1, -0.19, 0);
+    grip.rotation.z = -0.22;
+    grip.material = this.bodyMaterial;
+    if (id !== "shotgun") {
+      const magazine = MeshBuilder.CreateBox(`${this.id}-${id}-magazine`, { width: 0.12, height: magazineLength, depth: 0.12 }, this.scene);
+      magazine.parent = variant;
+      magazine.position.set(0.12, -magazineLength * 0.42, 0);
+      magazine.rotation.z = -0.16;
+      magazine.material = this.bodyMaterial;
+    } else {
+      const pump = MeshBuilder.CreateBox(`${this.id}-${id}-pump`, { width: 0.22, height: 0.13, depth: 0.2 }, this.scene);
+      pump.parent = variant;
+      pump.position.x = bodyLength * 0.5 + 0.18;
+      pump.material = this.bodyMaterial;
+    }
+    if (hasStock) {
+      const stock = MeshBuilder.CreateBox(`${this.id}-${id}-stock`, { width: 0.28, height: 0.16, depth: 0.14 }, this.scene);
+      stock.parent = variant;
+      stock.position.x = -bodyLength * 0.5 - 0.11;
+      stock.material = this.bodyMaterial;
+    }
+    const sight = MeshBuilder.CreateBox(`${this.id}-${id}-sight`, { width: 0.14, height: 0.08, depth: 0.06 }, this.scene);
+    sight.parent = variant;
+    sight.position.set(0.06, 0.13, 0);
+    sight.material = this.accentMaterial;
+    this.weaponVariants.set(id, variant);
   }
 }
 
@@ -393,14 +442,17 @@ class Rival extends Combatant {
       this.attackDamage = 12;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.08);
+      this.addMeleeSilhouette();
     } else if (style === "ranged") {
       this.attackDamage = 8;
       this.applyLoadout("veil");
       this.root.scaling.setAll(0.92);
+      this.addRangedSilhouette();
     } else if (style === "forestBoss") {
       this.attackDamage = 15;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.82);
+      this.addBossSilhouette("forest");
     } else if (style === "shield") {
       this.attackDamage = 9;
       this.applyLoadout("anker");
@@ -414,11 +466,73 @@ class Rival extends Combatant {
       shieldMat.alpha = 0.48;
       shieldMat.disableLighting = true;
       shield.material = shieldMat;
+      this.addShieldSilhouette(shieldMat);
     } else if (style === "caveBoss") {
       this.attackDamage = 16;
       this.applyLoadout("anker");
       this.root.scaling.setAll(2.05);
+      this.addBossSilhouette("cave");
     }
+  }
+
+  private addMeleeSilhouette() {
+    const material = new StandardMaterial(`${this.id}-melee-armour`, this.scene);
+    material.diffuseColor = new Color3(0.5, 0.12, 0.035);
+    material.specularColor = new Color3(0.18, 0.08, 0.04);
+    [-1, 1].forEach((side) => {
+      const arm = MeshBuilder.CreateCapsule(`${this.id}-melee-arm-${side}`, { height: 0.92, radius: 0.23, tessellation: 10 }, this.scene);
+      arm.parent = this.root;
+      arm.position.set(side * 0.63, 1.25, -0.08);
+      arm.rotation.z = side * 0.22;
+      arm.material = material;
+    });
+    const crest = MeshBuilder.CreateCylinder(`${this.id}-melee-crest`, { height: 0.46, diameterTop: 0, diameterBottom: 0.28, tessellation: 5 }, this.scene);
+    crest.parent = this.root;
+    crest.position.y = 2.37;
+    crest.material = material;
+  }
+
+  private addRangedSilhouette() {
+    const material = new StandardMaterial(`${this.id}-ranged-kit`, this.scene);
+    material.diffuseColor = new Color3(0.19, 0.045, 0.08);
+    material.emissiveColor = new Color3(0.08, 0.005, 0.012);
+    const antenna = MeshBuilder.CreateCylinder(`${this.id}-ranged-antenna`, { height: 0.72, diameter: 0.04, tessellation: 6 }, this.scene);
+    antenna.parent = this.root;
+    antenna.position.set(-0.18, 2.55, 0.13);
+    antenna.rotation.z = -0.16;
+    antenna.material = material;
+    const scope = MeshBuilder.CreateCylinder(`${this.id}-ranged-scope`, { height: 0.26, diameter: 0.14, tessellation: 8 }, this.scene);
+    scope.parent = this.root;
+    scope.position.set(0.89, 1.32, -0.38);
+    scope.rotation.z = Math.PI / 2;
+    scope.material = material;
+  }
+
+  private addShieldSilhouette(material: StandardMaterial) {
+    const crest = MeshBuilder.CreateBox(`${this.id}-shield-crest`, { width: 0.18, height: 1.18, depth: 0.16 }, this.scene);
+    crest.parent = this.root;
+    crest.position.set(0, 1.25, 0.83);
+    crest.material = material;
+  }
+
+  private addBossSilhouette(kind: "forest" | "cave") {
+    const outer = new StandardMaterial(`${this.id}-${kind}-boss-outer`, this.scene);
+    outer.diffuseColor = kind === "forest" ? new Color3(0.1, 0.27, 0.08) : new Color3(0.13, 0.11, 0.2);
+    outer.specularColor = new Color3(0.08, 0.1, 0.09);
+    const core = new StandardMaterial(`${this.id}-${kind}-boss-core`, this.scene);
+    core.diffuseColor = kind === "forest" ? new Color3(0.08, 0.72, 0.44) : new Color3(0.1, 0.65, 0.75);
+    core.emissiveColor = core.diffuseColor.scale(0.55);
+    [-1, 1].forEach((side) => {
+      const shoulder = MeshBuilder.CreateIcoSphere(`${this.id}-${kind}-boss-shoulder-${side}`, { radius: 0.42, subdivisions: 1 }, this.scene);
+      shoulder.parent = this.root;
+      shoulder.position.set(side * 0.55, 1.75, 0);
+      shoulder.scaling.set(1.15, 0.8, 0.9);
+      shoulder.material = outer;
+    });
+    const bossCore = MeshBuilder.CreateSphere(`${this.id}-${kind}-boss-core`, { diameter: 0.42, segments: 10 }, this.scene);
+    bossCore.parent = this.root;
+    bossCore.position.set(0, 1.48, -0.38);
+    bossCore.material = core;
   }
 
   override applyDamage(amount: number) {
@@ -545,6 +659,10 @@ export class GameWorld {
   private readonly stormRing?: Mesh;
   private readonly stormCore?: Mesh;
   private readonly terrainMaterial: StandardMaterial;
+  private shadowGenerator?: ShadowGenerator;
+  private renderingPipeline?: DefaultRenderingPipeline;
+  private shadowRefreshTimer = 0;
+  private readonly shadowCasters = new Set<Mesh>();
   private mode: "briefing" | "playing" | MatchOutcome = "briefing";
   private fireCooldown = 0;
   private uiTick = 0;
@@ -610,27 +728,76 @@ export class GameWorld {
     return this.options.step === "step5" && this.options.dungeonId === "cave";
   }
 
-  constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
-    scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
-    scene.ambientColor = new Color3(0.14, 0.18, 0.25);
-    scene.fogMode = Scene.FOGMODE_EXP2;
-    scene.fogColor = new Color3(0.035, 0.07, 0.12);
-    scene.fogDensity = canvas.clientWidth < 600 ? 0.0042 : 0.0085;
+  private configureVisualLighting() {
+    const quality = this.options.graphicsQuality;
+    const isMobile = this.canvas.clientWidth < 600;
+    const fogMultiplier = quality === "light" ? 0.68 : quality === "pretty" ? 1.08 : 0.9;
+    this.scene.clearColor = new Color4(0.055, 0.12, 0.22, 1);
+    this.scene.ambientColor = new Color3(0.22, 0.26, 0.34);
+    this.scene.fogMode = Scene.FOGMODE_EXP2;
+    this.scene.fogColor = new Color3(0.095, 0.18, 0.27);
+    this.scene.fogDensity = (isMobile ? 0.0036 : 0.0067) * fogMultiplier;
     if (this.isForestDungeon) {
-      scene.clearColor = new Color4(0.025, 0.11, 0.075, 1);
-      scene.ambientColor = new Color3(0.12, 0.22, 0.15);
-      scene.fogColor = new Color3(0.055, 0.16, 0.11);
-      scene.fogDensity = canvas.clientWidth < 600 ? 0.006 : 0.011;
+      this.scene.clearColor = new Color4(0.075, 0.19, 0.13, 1);
+      this.scene.ambientColor = new Color3(0.2, 0.31, 0.2);
+      this.scene.fogColor = new Color3(0.14, 0.28, 0.18);
+      this.scene.fogDensity = (isMobile ? 0.0045 : 0.008) * fogMultiplier;
     } else if (this.isCaveDungeon) {
-      scene.clearColor = new Color4(0.018, 0.014, 0.035, 1);
-      scene.ambientColor = new Color3(0.12, 0.11, 0.2);
-      scene.fogColor = new Color3(0.045, 0.035, 0.09);
-      scene.fogDensity = canvas.clientWidth < 600 ? 0.0055 : 0.01;
+      this.scene.clearColor = new Color4(0.035, 0.03, 0.075, 1);
+      this.scene.ambientColor = new Color3(0.18, 0.16, 0.29);
+      this.scene.fogColor = new Color3(0.075, 0.06, 0.15);
+      this.scene.fogDensity = (isMobile ? 0.0042 : 0.0075) * fogMultiplier;
     }
-    new HemisphericLight("sky-hemisphere", new Vector3(0.15, 1, 0.1), scene).intensity = this.isCaveDungeon ? 0.58 : 0.88;
-    const sun = new DirectionalLight("low-sun", new Vector3(-0.36, -0.72, 0.38), scene);
+
+    const sky = new HemisphericLight("stormfall-sky-fill", new Vector3(0.18, 1, 0.08), this.scene);
+    sky.groundColor = this.isCaveDungeon ? new Color3(0.08, 0.035, 0.13) : this.isForestDungeon ? new Color3(0.075, 0.12, 0.055) : new Color3(0.16, 0.075, 0.035);
+    sky.intensity = this.isCaveDungeon ? 0.72 : this.isForestDungeon ? 0.94 : 1.02;
+    if (quality === "light") return;
+
+    const sun = new DirectionalLight("stormfall-key-light", new Vector3(-0.36, -0.72, 0.38), this.scene);
     sun.position = new Vector3(42, 72, -35);
-    sun.intensity = this.isCaveDungeon ? 0.38 : 1.05;
+    sun.intensity = this.isCaveDungeon ? 0.48 : this.isForestDungeon ? 0.96 : 1.16;
+    if (quality === "pretty") {
+      const shadowGenerator = new ShadowGenerator(isMobile ? 1024 : 1536, sun);
+      shadowGenerator.useBlurExponentialShadowMap = true;
+      shadowGenerator.blurKernel = isMobile ? 8 : 16;
+      shadowGenerator.bias = 0.0008;
+      this.shadowGenerator = shadowGenerator;
+    }
+  }
+
+  private configureRenderingPipeline() {
+    const quality = this.options.graphicsQuality;
+    if (quality === "light") return;
+    const imageProcessing = this.scene.imageProcessingConfiguration;
+    imageProcessing.toneMappingEnabled = true;
+    imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    imageProcessing.exposure = this.isCaveDungeon ? 1.06 : 1.12;
+    imageProcessing.contrast = this.isCaveDungeon ? 1.12 : 1.08;
+    const pipeline = new DefaultRenderingPipeline("stormfall-visual-pipeline", true, this.scene, [this.camera]);
+    pipeline.fxaaEnabled = true;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.samples = quality === "pretty" ? 2 : 1;
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = quality === "pretty" ? 0.8 : 1.05;
+    pipeline.bloomWeight = quality === "pretty" ? 0.14 : 0.055;
+    pipeline.bloomKernel = quality === "pretty" ? 56 : 40;
+    this.renderingPipeline = pipeline;
+  }
+
+  private refreshShadowCasters() {
+    if (!this.shadowGenerator) return;
+    this.scene.meshes.forEach((mesh) => {
+      if (!(mesh instanceof Mesh) || this.shadowCasters.has(mesh) || !mesh.isVisible || !mesh.isEnabled()) return;
+      if (/collider|hp-label|event|warning|halo|hit-marker|terrain-scar/i.test(mesh.name)) return;
+      this.shadowGenerator?.addShadowCaster(mesh);
+      mesh.receiveShadows = true;
+      this.shadowCasters.add(mesh);
+    });
+  }
+
+  constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
+    this.configureVisualLighting();
 
     this.terrainMaterial = new StandardMaterial("sandstone-terrain", scene);
     this.terrainMaterial.diffuseColor = this.isCaveDungeon ? new Color3(0.13, 0.095, 0.19) : this.isForestDungeon ? new Color3(0.09, 0.26, 0.13) : SAND;
@@ -675,6 +842,7 @@ export class GameWorld {
     this.camera.maxZ = 500;
     scene.activeCamera = this.camera;
     this.cameraController = new CameraController(this.camera, this.obstacles);
+    this.configureRenderingPipeline();
     this.weaponSystem = new WeaponSystem();
     this.weaponSystem.damageMultiplier = 1 + Math.max(0, this.progression.attackLevel - 1) * 0.1;
     this.weaponSystem.reloadMultiplier = Math.max(0.6, 1 - Math.max(0, this.progression.reloadLevel - 1) * 0.1);
@@ -682,10 +850,12 @@ export class GameWorld {
     if (startsArmed) {
       this.weaponSystem.equip("assault", 120);
       this.player.setWeaponVisible(true);
+      this.player.setWeaponStyle("assault");
     } else {
       this.player.setWeaponVisible(false);
     }
     this.playerController = new PlayerController(this.player, this.cameraController, this.weaponSystem);
+    this.refreshShadowCasters();
     this.updateCamera(0);
     this.updateHud(true);
   }
@@ -696,7 +866,7 @@ export class GameWorld {
     this.dungeonStartedAt = performance.now();
     this.announcement = this.options.step === "step5" ? (this.isCaveDungeon ? "くらやみの洞窟　明かりをたよりに進もう！" : this.isForestDungeon ? "まよいの森　森のおくへ進もう！" : "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！") : "裂け目への降下を確認";
     this.dungeonObjective = this.options.step === "step5" ? (this.isCaveDungeon ? "洞窟のおくへ進もう！" : this.isForestDungeon ? "森のおくへ進もう！" : "敵を3体たおそう！") : this.dungeonObjective;
-    this.pushEvent(this.options.step === "step5" ? (this.isCaveDungeon ? "くらやみの洞窟へようこそ！" : this.isForestDungeon ? "まよいの森へようこそ！" : "はじまりの遺跡へようこそ！") : "エリア RIFT-07 に着地");
+    this.pushEvent(this.options.step === "step5" ? (this.isCaveDungeon ? "洞窟外縁信号を確認。明かりを追え。" : this.isForestDungeon ? "森林信号を確認。分岐を見失うな。" : "遺跡信号を確認。最深部へ進め。") : "エリア RIFT-07 に着地");
     if (this.options.step === "step5") this.playDungeonCue("spawn");
   }
 
@@ -710,6 +880,11 @@ export class GameWorld {
   }
 
   update(delta: number) {
+    this.shadowRefreshTimer -= delta;
+    if (this.shadowGenerator && this.shadowRefreshTimer <= 0) {
+      this.refreshShadowCasters();
+      this.shadowRefreshTimer = 1.6;
+    }
     if (this.mode === "playing") {
       this.elapsed += delta;
       if (this.options.step === "full") this.updateStorm(delta);
@@ -1048,6 +1223,8 @@ export class GameWorld {
   }
 
   dispose() {
+    this.renderingPipeline?.dispose();
+    this.shadowGenerator?.dispose();
     this.input.dispose();
     this.touchInput.dispose();
     this.player.dispose();
@@ -1098,6 +1275,85 @@ export class GameWorld {
     this.createHills();
     this.createTrees();
     this.createBuildings();
+    if (this.options.step === "step5") this.createRuinsVisualPass();
+  }
+
+  private createRuinsVisualPass() {
+    const stoneMat = new StandardMaterial("ruins-weathered-stone", this.scene);
+    stoneMat.diffuseColor = new Color3(0.42, 0.28, 0.15);
+    stoneMat.specularColor = new Color3(0.08, 0.06, 0.035);
+    stoneMat.specularPower = 34;
+    const mossMat = new StandardMaterial("ruins-vine-moss", this.scene);
+    mossMat.diffuseColor = new Color3(0.12, 0.31, 0.09);
+    mossMat.emissiveColor = new Color3(0.005, 0.025, 0.004);
+    const flameMat = new StandardMaterial("ruins-torch-flame", this.scene);
+    flameMat.diffuseColor = AMBER;
+    flameMat.emissiveColor = AMBER.scale(0.95);
+    flameMat.disableLighting = true;
+    [30, 10, -18, -48, -76].forEach((z, room) => {
+      const floor = MeshBuilder.CreateBox(`ruins-floor-slab-${room}`, { width: 16.5, height: 0.14, depth: 18 }, this.scene);
+      floor.position.set(0, 0.06, z);
+      floor.material = stoneMat;
+      [-1, 1].forEach((side) => {
+        const pillar = MeshBuilder.CreateCylinder(`ruins-pillar-${room}-${side}`, { height: 4.9 - (room % 2) * 1.2, diameterTop: 0.52, diameterBottom: 0.7, tessellation: 8 }, this.scene);
+        pillar.position.set(side * 7.1, pillar.getBoundingInfo().boundingBox.extendSize.y, z + (room % 2 ? 3.8 : -3.8));
+        pillar.rotation.z = side * (room % 2 ? 0.11 : -0.04);
+        pillar.material = stoneMat;
+        const vine = MeshBuilder.CreateTorus(`ruins-vine-${room}-${side}`, { diameter: 0.72, thickness: 0.07, tessellation: 12 }, this.scene);
+        vine.position.set(side * 7.12, 2.2, z + (room % 2 ? 3.82 : -3.78));
+        vine.rotation.x = Math.PI / 2;
+        vine.material = mossMat;
+      });
+      if (room < 4) {
+        const torch = MeshBuilder.CreateCylinder(`ruins-torch-${room}`, { height: 2.3, diameter: 0.13, tessellation: 6 }, this.scene);
+        torch.position.set(room % 2 ? -6.1 : 6.1, 1.15, z);
+        torch.material = stoneMat;
+        const flame = MeshBuilder.CreateSphere(`ruins-flame-${room}`, { diameter: 0.3, segments: 8 }, this.scene);
+        flame.position.set(torch.position.x, 2.36, z);
+        flame.material = flameMat;
+        if (this.options.graphicsQuality !== "light") {
+          const light = new PointLight(`ruins-torch-light-${room}`, flame.position.clone(), this.scene);
+          light.diffuse = new Color3(1, 0.55, 0.2);
+          light.intensity = this.options.graphicsQuality === "pretty" ? 1.8 : 1.15;
+          light.range = this.options.graphicsQuality === "pretty" ? 11 : 7;
+        }
+      }
+    });
+    [-73, -75, -77].forEach((z, index) => {
+      const step = MeshBuilder.CreateBox(`ruins-boss-step-${index}`, { width: 8.5 - index * 0.7, height: 0.24, depth: 1.2 }, this.scene);
+      step.position.set(0, 0.12 + index * 0.16, z);
+      step.material = stoneMat;
+    });
+    this.createWorldSignal("ruins-forward-signal", new Vector3(-4.7, 0, 21), stoneMat, new Color3(0.075, 0.85, 0.77));
+  }
+
+  private createWorldSignal(id: string, position: Vector3, structureMaterial: StandardMaterial, signalColor: Color3) {
+    const root = new TransformNode(id, this.scene);
+    root.position.copyFrom(position);
+    [-1, 1].forEach((side) => {
+      const leg = MeshBuilder.CreateCylinder(`${id}-leg-${side}`, { height: 3.3, diameterTop: 0.12, diameterBottom: 0.27, tessellation: 6 }, this.scene);
+      leg.parent = root;
+      leg.position.set(side * 0.42, 1.48, 0);
+      leg.rotation.z = side * 0.18;
+      leg.material = structureMaterial;
+    });
+    const spine = MeshBuilder.CreateCylinder(`${id}-spine`, { height: 4.4, diameterTop: 0.1, diameterBottom: 0.19, tessellation: 6 }, this.scene);
+    spine.parent = root;
+    spine.position.y = 2.2;
+    spine.material = structureMaterial;
+    const beacon = MeshBuilder.CreateSphere(`${id}-beacon`, { diameter: 0.48, segments: 10 }, this.scene);
+    beacon.parent = root;
+    beacon.position.y = 4.55;
+    const beaconMat = new StandardMaterial(`${id}-beacon-material`, this.scene);
+    beaconMat.diffuseColor = signalColor;
+    beaconMat.emissiveColor = signalColor.scale(0.8);
+    beaconMat.disableLighting = true;
+    beacon.material = beaconMat;
+    const ring = MeshBuilder.CreateTorus(`${id}-ring`, { diameter: 1.7, thickness: 0.045, tessellation: 24 }, this.scene);
+    ring.parent = root;
+    ring.position.y = 0.08;
+    ring.rotation.x = Math.PI / 2;
+    ring.material = beaconMat;
   }
 
   private buildCaveEnvironment() {
@@ -1125,22 +1381,34 @@ export class GameWorld {
         const torch = MeshBuilder.CreateCylinder(`cave-torch-${index}`, { height: 2.6, diameter: 0.18, tessellation: 8 }, this.scene);
         torch.position.set(index % 4 === 0 ? -8.5 : 8.5, 1.3, z);
         torch.material = lampMat;
-        const light = new PointLight(`cave-torch-light-${index}`, torch.position.add(new Vector3(0, 1.1, 0)), this.scene);
-        light.diffuse = new Color3(1, 0.45, 0.14);
-        light.intensity = 2.35;
-        light.range = 14;
+        if (this.options.graphicsQuality !== "light" && (this.options.graphicsQuality === "pretty" || index % 4 === 0)) {
+          const light = new PointLight(`cave-torch-light-${index}`, torch.position.add(new Vector3(0, 1.1, 0)), this.scene);
+          light.diffuse = new Color3(1, 0.45, 0.14);
+          light.intensity = this.options.graphicsQuality === "pretty" ? 2.65 : 2.1;
+          light.range = this.options.graphicsQuality === "pretty" ? 16 : 12;
+        }
       } else {
-        const crystal = MeshBuilder.CreateCylinder(`cave-crystal-${index}`, { height: 2.3, diameterTop: 0.12, diameterBottom: 0.65, tessellation: 5 }, this.scene);
-        crystal.position.set(index % 3 === 0 ? -8 : 8, 1.15, z);
-        crystal.rotation.z = index % 3 === 0 ? -0.25 : 0.22;
-        crystal.material = crystalMat;
+        [-0.42, 0, 0.42].forEach((offset, shard) => {
+          const crystal = MeshBuilder.CreateCylinder(`cave-crystal-${index}-${shard}`, { height: 1.45 + shard * 0.35, diameterTop: 0.07, diameterBottom: 0.42, tessellation: 5 }, this.scene);
+          crystal.position.set((index % 3 === 0 ? -8 : 8) + offset, 0.72 + shard * 0.15, z + offset * 0.6);
+          crystal.rotation.z = (index % 3 === 0 ? -0.25 : 0.22) + offset * 0.2;
+          crystal.material = crystalMat;
+        });
+      }
+      if (index % 3 === 0) {
+        const stalactite = MeshBuilder.CreateCylinder(`cave-stalactite-${index}`, { height: 2.7, diameterTop: 0.05, diameterBottom: 0.72, tessellation: 6 }, this.scene);
+        stalactite.position.set(index % 2 ? -3.6 : 3.6, 7.1, z + 2.1);
+        stalactite.rotation.z = index % 2 ? 0.12 : -0.12;
+        stalactite.material = basaltMat;
       }
     }
-    const playerLight = new PointLight("cave-player-light", new Vector3(0, 2.8, 34), this.scene);
-    playerLight.diffuse = new Color3(0.18, 0.78, 0.9);
-    playerLight.intensity = 2.4;
-    playerLight.range = 18;
-    this.scene.onBeforeRenderObservable.add(() => playerLight.position.copyFrom(this.player.root.position.add(new Vector3(0, 2.8, 0))));
+    if (this.options.graphicsQuality !== "light") {
+      const playerLight = new PointLight("cave-player-light", new Vector3(0, 2.8, 34), this.scene);
+      playerLight.diffuse = new Color3(0.18, 0.78, 0.9);
+      playerLight.intensity = this.options.graphicsQuality === "pretty" ? 2.65 : 2.1;
+      playerLight.range = this.options.graphicsQuality === "pretty" ? 20 : 16;
+      this.scene.onBeforeRenderObservable.add(() => playerLight.position.copyFrom(this.player.root.position.add(new Vector3(0, 2.8, 0))));
+    }
     [[-8.5, 21], [8.5, -52]].forEach(([x, z], index) => {
       const pylon = MeshBuilder.CreateCylinder(`cave-nav-pylon-${index}`, { height: 5.4, diameterTop: 0.2, diameterBottom: 0.52, tessellation: 6 }, this.scene);
       pylon.position.set(x, 2.7, z);
@@ -1161,6 +1429,7 @@ export class GameWorld {
       beaconMat.disableLighting = true;
       beacon.material = beaconMat;
     });
+    this.createWorldSignal("cave-forward-signal", new Vector3(3.8, 0, 23), basaltMat, TEAL);
   }
 
   private createCaveAreaOne() {
@@ -1305,6 +1574,9 @@ export class GameWorld {
     leafMat.emissiveColor = new Color3(0.006, 0.035, 0.012);
     const mossMat = new StandardMaterial("forest-moss", this.scene);
     mossMat.diffuseColor = new Color3(0.12, 0.42, 0.14);
+    const grassMat = new StandardMaterial("forest-grass", this.scene);
+    grassMat.diffuseColor = new Color3(0.17, 0.44, 0.12);
+    grassMat.emissiveColor = new Color3(0.008, 0.028, 0.006);
     const placements = [[-11, 28], [11, 25], [-10, 13], [10, 7], [-12, -4], [12, -6], [-11, -20], [12, -22], [-10, -38], [11, -43], [-12, -64], [12, -70], [-10, -88], [10, -92]];
     placements.forEach(([x, z], index) => {
       const trunk = MeshBuilder.CreateCylinder(`forest-tree-trunk-${index}`, { height: 5.2 + (index % 3), diameterTop: 0.36, diameterBottom: 0.72, tessellation: 8 }, this.scene);
@@ -1315,6 +1587,12 @@ export class GameWorld {
       canopy.position.set(x + (index % 2 ? 0.28 : -0.2), 6.4 + (index % 3) * 0.2, z);
       canopy.scaling.y = 1.38;
       canopy.material = leafMat;
+      [-1, 1].forEach((side) => {
+        const branch = MeshBuilder.CreateIcoSphere(`forest-tree-branch-${index}-${side}`, { radius: 1.45 + (index % 2) * 0.2, subdivisions: 1 }, this.scene);
+        branch.position.set(x + side * 1.28, 5.45 + (index % 3) * 0.16, z + (side > 0 ? 0.45 : -0.4));
+        branch.scaling.set(1.18, 0.88, 0.92);
+        branch.material = leafMat;
+      });
       this.obstacles.push({ position: new Vector3(x, 0, z), radius: 1.15 });
     });
     [[-6, 1], [7, -16], [-7, -31], [7, -35], [-6, -57], [7, -77]].forEach(([x, z], index) => {
@@ -1324,6 +1602,16 @@ export class GameWorld {
       rock.material = mossMat;
       this.obstacles.push({ position: new Vector3(x, 0, z), radius: 1.1 });
     });
+    const grassCount = this.options.graphicsQuality === "light" ? 16 : this.options.graphicsQuality === "pretty" ? 44 : 30;
+    for (let index = 0; index < grassCount; index += 1) {
+      const z = 30 - ((index * 17) % 120);
+      const x = ((index * 11) % 19) - 9.5;
+      if (Math.abs(x) < 3.6) continue;
+      const tuft = MeshBuilder.CreateCylinder(`forest-grass-tuft-${index}`, { height: 0.38 + (index % 3) * 0.09, diameterTop: 0, diameterBottom: 0.34, tessellation: 4 }, this.scene);
+      tuft.position.set(x, tuft.getBoundingInfo().boundingBox.extendSize.y, z);
+      tuft.rotation.y = index * 0.74;
+      tuft.material = grassMat;
+    }
     const pylonMat = new StandardMaterial("forest-pylon-mat", this.scene);
     pylonMat.diffuseColor = new Color3(0.055, 0.085, 0.085);
     pylonMat.emissiveColor = TEAL.scale(0.1);
@@ -1351,6 +1639,7 @@ export class GameWorld {
       ringMat.disableLighting = true;
       ring.material = ringMat;
     });
+    this.createWorldSignal("forest-forward-signal", new Vector3(-3.8, 0, 19), pylonMat, TEAL);
     this.createForestDirectionSign(new Vector3(-4.8, 0, 2.2), "← 安全な道\n回復があるよ");
     this.createForestDirectionSign(new Vector3(4.8, 0, 2.2), "危険な道 →\n宝箱があるかも！");
   }
@@ -1532,6 +1821,17 @@ export class GameWorld {
   }
 
   private createTerrainTexture() {
+    const generatedTextureUrl = this.isCaveDungeon
+      ? "/manus-storage/stormfall-cave-ground-texture_32b8bd63.png"
+      : this.isForestDungeon
+        ? "/manus-storage/stormfall-forest-ground-texture_6eb34a85.png"
+        : "/manus-storage/stormfall-ruins-ground-texture_441a71b0.png";
+    const generatedTexture = new Texture(generatedTextureUrl, this.scene, true, false);
+    generatedTexture.uScale = this.isCaveDungeon ? 7.6 : this.isForestDungeon ? 6.8 : 7.2;
+    generatedTexture.vScale = this.isCaveDungeon ? 22 : this.isForestDungeon ? 18 : 12;
+    generatedTexture.anisotropicFilteringLevel = this.options.graphicsQuality === "pretty" ? 8 : this.options.graphicsQuality === "standard" ? 4 : 1;
+    return generatedTexture;
+    /* Legacy procedural texture retained below as an offline fallback reference for future non-network builds.
     const texture = new DynamicTexture("sandstone-field-texture", { width: 1024, height: 1024 }, this.scene, false);
     const context = texture.getContext();
     context.fillStyle = "#6f3513";
@@ -1562,6 +1862,7 @@ export class GameWorld {
     texture.vScale = 5.4;
     texture.update(false);
     return texture;
+    */
   }
 
   private createTerrainScars() {
@@ -2191,6 +2492,7 @@ export class GameWorld {
     }
     this.weaponSystem.equip(id);
     this.player.setWeaponVisible(true);
+    this.player.setWeaponStyle(id);
     this.announcement = `${this.weaponSystem.definition()?.name ?? id} 装備`;
     this.pushEvent(this.announcement);
   }
@@ -2220,6 +2522,7 @@ export class GameWorld {
     } else if (pickup.type === "weapon" && pickup.weaponId) {
       this.weaponSystem.equip(pickup.weaponId, 90);
       this.player.setWeaponVisible(true);
+      this.player.setWeaponStyle(pickup.weaponId);
       this.announcement = `${pickup.label}をひろった`;
     } else if (pickup.type === "ammo" && pickup.ammoType) {
       this.weaponSystem.addReserve(pickup.amount ?? 30, pickup.ammoType);
@@ -2280,7 +2583,7 @@ export class GameWorld {
   }
 
   private updateCamera(delta: number) {
-    this.cameraController.update(delta, this.player.root.position, this.currentAiming, this.currentCrouching);
+    this.cameraController.update(delta, this.player.root.position, this.currentAiming, this.currentCrouching, this.lastMotionState === "RUN");
   }
 
   private updateCameraLegacy(delta: number) {

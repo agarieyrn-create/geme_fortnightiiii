@@ -1,4 +1,4 @@
-// Stormfall: Last Horizon design contract — Babylon owns the living storm-rift world while React frames it with restrained tactical UI.
+// Stormfall: Last Horizon Visual Layer — Babylon owns the low-poly daylight, readable fog, and quality-aware scene while React frames tactical UI.
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
 import { Effect } from "@babylonjs/core/Materials/effect";
@@ -13,7 +13,7 @@ export type GameHandle = {
   dispose: () => void;
 };
 
-export type GameSceneOptions = Pick<WorldOptions, "demo" | "step" | "onResult" | "progression" | "dungeonId" | "debug" | "onTutorial"> & { avatarId: string };
+export type GameSceneOptions = Pick<WorldOptions, "demo" | "step" | "onResult" | "progression" | "dungeonId" | "debug" | "onTutorial" | "graphicsQuality"> & { avatarId: string };
 export type { MatchOutcome };
 
 export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement, options: GameSceneOptions): Promise<GameHandle> {

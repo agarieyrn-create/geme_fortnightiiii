@@ -1,4 +1,4 @@
-// Stormfall: Last Horizon — standalone TPS orbit camera controller.
+// Stormfall TPS Visual Layer — shoulder framing, readable aim zoom, and a restrained sprint FOV preserve the existing orbit-control contract.
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 
@@ -39,13 +39,13 @@ export class CameraController {
     this.recoil = Math.min(0.08, this.recoil + amount);
   }
 
-  update(delta: number, targetPosition: Vector3, aiming: boolean, crouching: boolean) {
+  update(delta: number, targetPosition: Vector3, aiming: boolean, crouching: boolean, running = false) {
     const forward = this.forward();
-    const shoulder = new Vector3(Math.cos(this.yaw) * (aiming ? 0.82 : 1.25), 0, -Math.sin(this.yaw) * (aiming ? 0.82 : 1.25));
+    const shoulder = new Vector3(Math.cos(this.yaw) * (aiming ? 0.68 : 1.08), 0, -Math.sin(this.yaw) * (aiming ? 0.68 : 1.08));
     this.recoil *= Math.exp(-delta * 18);
     const target = targetPosition.add(new Vector3(0, crouching ? 1.0 : 1.42, 0));
-    const distance = aiming ? 5.4 : 7.4;
-    const desired = target.subtract(forward.scale(distance)).add(new Vector3(0, (aiming ? 2.65 : 3.7) + this.pitch * 2.2, 0)).add(shoulder);
+    const distance = aiming ? 4.75 : 6.85;
+    const desired = target.subtract(forward.scale(distance)).add(new Vector3(0, (aiming ? 2.35 : 3.3) + this.pitch * 2.2, 0)).add(shoulder);
     let safePosition = desired.clone();
     const segment = desired.subtract(target);
     this.obstacles.forEach((obstacle) => {
@@ -60,7 +60,9 @@ export class CameraController {
       }
     });
     this.camera.position = Vector3.Lerp(this.camera.position, safePosition, 1 - Math.exp(-delta * 10));
+    const targetFov = aiming ? 0.78 : running ? 1.01 : 0.92;
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, delta * 6.5);
     const pitchLook = (this.pitch - this.recoil) * (aiming ? 4.6 : 4.2);
-    this.camera.setTarget(target.add(forward.scale(aiming ? 2.5 : 8)).add(new Vector3(0, pitchLook, 0)));
+    this.camera.setTarget(target.add(forward.scale(aiming ? 3.4 : 8.5)).add(new Vector3(0, pitchLook, 0)));
   }
 }

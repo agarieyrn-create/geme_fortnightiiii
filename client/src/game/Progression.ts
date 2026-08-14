@@ -1,4 +1,5 @@
 export type TutorialKey = "move" | "look" | "aimFire" | "pickup" | "jump" | "caveSwitch";
+export type GraphicsQuality = "light" | "standard" | "pretty";
 
 export type ProgressionData = {
   coins: number;
@@ -15,6 +16,7 @@ export type ProgressionData = {
   reloadLevel: number;
   sfxVolume: number;
   bgmVolume: number;
+  graphicsQuality: GraphicsQuality;
   tutorialSeen: Record<TutorialKey, boolean>;
 };
 
@@ -33,6 +35,7 @@ export const DEFAULT_PROGRESSION: ProgressionData = {
   reloadLevel: 1,
   sfxVolume: 0.7,
   bgmVolume: 0.5,
+  graphicsQuality: "standard",
   tutorialSeen: { move: false, look: false, aimFire: false, pickup: false, jump: false, caveSwitch: false },
 };
 
@@ -43,7 +46,8 @@ export function loadProgression(): ProgressionData {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<ProgressionData> | null;
     const data = { ...DEFAULT_PROGRESSION, ...(parsed ?? {}) };
-    return { ...data, ruinsCleared: Boolean(data.ruinsCleared || data.clears > 0), forestUnlocked: Boolean(data.forestUnlocked || data.clears > 0), caveUnlocked: Boolean(data.caveUnlocked || data.forestClears > 0) };
+    const graphicsQuality: GraphicsQuality = data.graphicsQuality === "light" || data.graphicsQuality === "pretty" || data.graphicsQuality === "standard" ? data.graphicsQuality : "standard";
+    return { ...data, graphicsQuality, ruinsCleared: Boolean(data.ruinsCleared || data.clears > 0), forestUnlocked: Boolean(data.forestUnlocked || data.clears > 0), caveUnlocked: Boolean(data.caveUnlocked || data.forestClears > 0) };
   } catch {
     return DEFAULT_PROGRESSION;
   }

@@ -1,9 +1,9 @@
 // Stormfall: Last Horizon design contract — a cinematic arcade-sci-fi frame using deep ultramarine,
-// storm teal, warm sandstone, edge-anchored tactical HUD, and a distinct lightning-ring emblem.
+// Stormfall Visual Frame — storm teal, warm sandstone, edge-anchored tactical HUD, a distinct lightning-ring emblem, and child-friendly quality controls.
 import { useEffect, useRef, useState } from "react";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { createGameScene, type GameHandle, type MatchOutcome } from "@/game/scene";
-import { applyUpgrade, dungeonReward, getPlayerStats, getStrength, loadProgression, markTutorialSeen, resetProgression, saveProgression, type ProgressionData, type TutorialKey, upgradeCost } from "@/game/Progression";
+import { applyUpgrade, dungeonReward, getPlayerStats, getStrength, loadProgression, markTutorialSeen, resetProgression, saveProgression, type GraphicsQuality, type ProgressionData, type TutorialKey, upgradeCost } from "@/game/Progression";
 import type { DungeonId } from "@/game/DungeonConfig";
 
 const LOGO_URL = "/manus-storage/stormfall-logo-fixed_bf9eea9a.png";
@@ -79,6 +79,7 @@ export default function GameCanvas() {
       dungeonId: selectedDungeon,
       avatarId: selectedAvatarRef.current,
       progression,
+      graphicsQuality: progression.graphicsQuality,
       debug: debugMode,
       onTutorial: (key, text, target) => {
         const next = markTutorialSeen(progressionRef.current, key);
@@ -141,6 +142,15 @@ export default function GameCanvas() {
     saveProgression(next);
   };
 
+  const updateGraphicsQuality = (graphicsQuality: GraphicsQuality) => {
+    const next = { ...progression, graphicsQuality };
+    progressionRef.current = next;
+    setProgression(next);
+    saveProgression(next);
+    setHubNotice(`画質を「${graphicsQuality === "light" ? "軽い" : graphicsQuality === "pretty" ? "きれい" : "標準"}」にしたよ`);
+    window.setTimeout(() => setHubNotice(""), 1500);
+  };
+
   const beginMatch = (dungeonId: DungeonId = "ruins") => {
     if (dungeonId === "forest" && !progression.forestUnlocked) return;
     if (dungeonId === "cave" && !progression.caveUnlocked) return;
@@ -189,7 +199,7 @@ export default function GameCanvas() {
       </div>
       {tutorial && <div className="tutorial-toast" role="status">{tutorial.text}</div>}
 
-      <div id="hud" className="stormfall-hud combat-hud" aria-live="polite">
+      <div id="hud" className={`stormfall-hud combat-hud ${gameState === "playing" ? "is-playing" : "is-hidden"}`} aria-live="polite">
         <header className="hud-topbar">
           <div className="brand-lockup">
             <img src={LOGO_URL} alt="Stormfall emblem" />
@@ -254,7 +264,7 @@ export default function GameCanvas() {
       </div>
 
       {!started && (
-        <section className="launch-screen hub-screen" style={{ backgroundImage: `linear-gradient(90deg, rgba(3,10,22,.97) 3%, rgba(3,10,22,.78) 43%, rgba(3,10,22,.3) 100%), url(${REFERENCE_URL})` }}>
+        <section className="launch-screen hub-screen" style={{ backgroundImage: `linear-gradient(90deg, rgba(3,10,22,.97) 3%, rgba(3,10,22,.76) 43%, rgba(3,10,22,.22) 100%), url(${REFERENCE_URL})` }}>
           <div className="hub-world-signals" aria-hidden="true"><i className="hub-storm-arc" /><i className="hub-nav-pylon" /><i className="hub-supply-beacon" /><span>STORM FRONT // RIFT-07</span></div>
           <div className="hub-card">
             <img className="launch-logo" src={LOGO_URL} alt="" />
@@ -263,14 +273,14 @@ export default function GameCanvas() {
             <div className="hub-stats"><div className="coin-readout">コイン　<strong>🪙 {progression.coins}</strong></div><div className="strength-readout">つよさ　<strong>{strength}</strong></div></div>
             {hubNotice && <p className="hub-notice">{hubNotice}</p>}
             {hubView === "home" && <>
-              <p className="launch-copy">現在地：嵐の外縁 // 次の降下地点を指定せよ。</p>
+              <p className="launch-copy">外縁信号を確認。嵐の向こうに降下地点がある。</p>
               {progression.iceMountainDiscovered ? <p className="hub-notice">新しい場所が見つかった！　🔒 こおりの山</p> : progression.caveUnlocked ? <p className="hub-notice">新しい場所が見つかった！　くらやみの洞窟</p> : null}
               <div className="hub-menu"><button type="button" onClick={() => setHubView("dungeons")}>ダンジョンへ</button><button type="button" onClick={() => setHubView("upgrade")}>強くする</button><button type="button" onClick={() => setHubView("loadout")}>そうび</button><button type="button" onClick={() => setHubView("settings")}>設定</button></div>
             </>}
             {hubView === "dungeons" && <div className="hub-panel"><div className="power-compare">{strength >= 200 ? "楽にいけそう！" : strength >= 150 ? "ちょうどいい！" : "ちょっとむずかしいかも！"}</div><button className="dungeon-card" type="button" onClick={() => beginMatch("ruins")}><strong>はじまりの遺跡</strong><span>おすすめのつよさ　100</span><span>クリア報酬　🪙 50　／　初回　🪙 100</span><b>出発する</b></button><div className="locked-dungeons"><button type="button" className={`forest-dungeon ${progression.forestUnlocked ? "unlocked-dungeon" : ""}`} style={progression.forestUnlocked ? { backgroundImage: `linear-gradient(90deg, rgba(3,18,11,.93), rgba(3,18,11,.55)), url(${FOREST_REFERENCE_URL})` } : undefined} disabled={!progression.forestUnlocked} onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=forest`); window.location.reload(); }}><strong>{progression.forestUnlocked ? "まよいの森" : "🔒 まよいの森"}</strong><small>{progression.forestUnlocked ? "おすすめのつよさ　150　／　クリア報酬　🪙 100" : "はじまりの遺跡をクリアしよう！"}</small><b>{progression.forestUnlocked ? "出発する" : "まだ行けないよ"}</b></button><button type="button" className={`forest-dungeon cave-dungeon ${progression.caveUnlocked ? "unlocked-dungeon" : ""}`} style={progression.caveUnlocked ? { backgroundImage: `linear-gradient(90deg, rgba(12,9,19,.94), rgba(12,9,19,.56)), url(${CAVE_REFERENCE_URL})` } : undefined} disabled={!progression.caveUnlocked} onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=cave`); window.location.reload(); }}><strong>{progression.caveUnlocked ? "くらやみの洞窟" : "🔒 くらやみの洞窟"}</strong><small>{progression.caveUnlocked ? "おすすめのつよさ　200　／　初回　🪙 200" : "まよいの森をクリアしよう！"}</small><b>{progression.caveUnlocked ? "出発する" : "まだ行けないよ"}</b></button><span>{progression.iceMountainDiscovered ? "🔒 こおりの山" : "？？？"}</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "upgrade" && <div className="hub-panel upgrade-list"><div className="strength-readout">今のつよさ　<strong>{strength}</strong></div>{([ ["hpLevel", "HPアップ", "もっと元気になる！"], ["attackLevel", "こうげき力アップ", "てきに大きなダメージ！"], ["reloadLevel", "リロードアップ", "もっと早くリロード！"] ] as const).map(([key, title, copy]) => { const next = Math.min(5, progression[key] + 1); const current = key === "hpLevel" ? `${playerStats.maxHp}` : key === "attackLevel" ? `${playerStats.damage.toFixed(1)}` : `${playerStats.reloadTime.toFixed(1)}秒`; const nextValue = key === "hpLevel" ? `${playerStats.maxHp + 20}` : key === "attackLevel" ? `${(playerStats.damage * 1.1).toFixed(1)}` : `${(playerStats.reloadTime * 0.9).toFixed(1)}秒`; return <div className="upgrade-card" key={key}><div><strong>{title}</strong><span>{copy}</span><small>Lv.{progression[key]} → Lv.{next}</small><small>{key === "hpLevel" ? "HP" : key === "attackLevel" ? "こうげき力" : "リロード時間"}　{current} → {nextValue}</small></div><button type="button" disabled={progression[key] >= 5 || progression.coins < upgradeCost(progression[key])} onClick={() => changeUpgrade(key)}>{progression[key] >= 5 ? "最大" : `${upgradeCost(progression[key])}コイン`}</button></div>})}<button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "loadout" && <div className="hub-panel"><p>今つかえる武器</p><div className="loadout-list"><span>アサルトライフル</span><span>サブマシンガン</span><span>ショットガン</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
-            {hubView === "settings" && <div className="hub-panel settings-panel"><label>効果音　<input type="range" min="0" max="1" step="0.1" value={progression.sfxVolume} onChange={(event) => updateVolume("sfxVolume", Number(event.target.value))} /></label><label>BGM　<input type="range" min="0" max="1" step="0.1" value={progression.bgmVolume} onChange={(event) => updateVolume("bgmVolume", Number(event.target.value))} /></label><button className="save-reset-button" type="button" onClick={() => setResetConfirm(true)}>セーブデータをリセット</button><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
+            {hubView === "settings" && <div className="hub-panel settings-panel"><label>効果音　<input type="range" min="0" max="1" step="0.1" value={progression.sfxVolume} onChange={(event) => updateVolume("sfxVolume", Number(event.target.value))} /></label><label>BGM　<input type="range" min="0" max="1" step="0.1" value={progression.bgmVolume} onChange={(event) => updateVolume("bgmVolume", Number(event.target.value))} /></label><fieldset className="graphics-quality"><legend>画質</legend><small>スマホは「標準」がおすすめ</small><div>{([ ["light", "軽い"], ["standard", "標準"], ["pretty", "きれい"] ] as const).map(([quality, label]) => <button type="button" key={quality} className={progression.graphicsQuality === quality ? "selected" : ""} aria-pressed={progression.graphicsQuality === quality} onClick={() => updateGraphicsQuality(quality)}>{label}</button>)}</div></fieldset><button className="save-reset-button" type="button" onClick={() => setResetConfirm(true)}>セーブデータをリセット</button><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
           </div>
           {hubView === "home" && <aside className="avatar-chooser" aria-label="キャラクター選択"><div className="chooser-heading"><span>PLAYER</span><strong>キャラクターを選択</strong></div><div className="avatar-grid">{AVATARS.map((option) => <button key={option.id} type="button" className={`avatar-card ${avatar === option.id ? "selected" : ""}`} onClick={() => selectAvatar(option.id)} aria-pressed={avatar === option.id}><img src={option.image} alt={`${option.name} の3Dアバター`} /><span>{option.name}</span><small>{option.role}</small></button>)}</div></aside>}
         </section>
