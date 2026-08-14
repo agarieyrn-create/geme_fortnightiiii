@@ -232,3 +232,22 @@ button { font: inherit; }
 
 /* Japanese labels stay compact on desktop as well. */
 .weapon-slots button { font-style: normal; }
+
+/* STEP 5 dungeon HUD: short Japanese objective and boss bar, kept away from the crosshair. */
+.dungeon-objective { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); z-index: 20; display: grid; gap: 3px; min-width: 220px; padding: 7px 12px; text-align: center; border: 1px solid rgba(19, 217, 196, .42); background: rgba(3, 15, 25, .72); color: #f3fbfa; pointer-events: none; }
+.dungeon-objective span { color: #78bfc0; font: 9px "Noto Sans JP", sans-serif; letter-spacing: .12em; }
+.dungeon-objective strong { color: #fff3cb; font: 700 14px "Noto Sans JP", sans-serif; }
+.boss-panel { position: fixed; top: 19px; left: 50%; z-index: 21; display: none; width: min(360px, 42vw); transform: translateX(-50%); padding: 7px 12px; border: 1px solid rgba(255, 97, 83, .58); background: rgba(30, 5, 12, .78); color: #fff; pointer-events: none; }
+.boss-panel.is-visible { display: block; }
+.boss-panel > div:first-child { display: flex; justify-content: space-between; font: 700 11px "Noto Sans JP", sans-serif; }
+.boss-panel > div:first-child b { color: #ffb4a9; font-weight: 600; }
+.boss-meter { height: 7px; margin-top: 4px; background: rgba(255,255,255,.16); }
+.boss-meter i { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, #ff4d5e, #ffb13d); transition: width .15s linear; }
+.result-stats { display: grid; gap: 6px; margin: 16px auto 22px; color: #c1d2d5; font: 13px "Noto Sans JP", sans-serif; }
+.result-actions { display: flex; justify-content: center; gap: 8px; }
+.result-actions button { min-width: 96px; }
+@media (max-width: 767px), (pointer: coarse) {
+  .dungeon-objective { top: 68px; min-width: 190px; padding: 5px 8px; }
+  .dungeon-objective strong { font-size: 12px; }
+  .boss-panel { top: 16px; width: 220px; }
+}

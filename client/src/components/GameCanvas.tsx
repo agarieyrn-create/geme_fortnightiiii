@@ -52,7 +52,8 @@ export default function GameCanvas() {
 
     void createGameScene(engine, canvas, {
       demo: isDemo,
-      step: "step4",
+              step: "step5",
+
       avatarId: selectedAvatarRef.current,
       onResult: (nextOutcome) => {
         setOutcome(nextOutcome);
@@ -96,7 +97,7 @@ export default function GameCanvas() {
   };
 
   return (
-    <main className="stormfall-shell combat-mode step4-mode">
+    <main className="stormfall-shell combat-mode step5-mode">
       <canvas
         aria-label="Stormfall: Last Horizon の3Dゲーム画面"
         ref={canvasRef}
@@ -127,13 +128,13 @@ export default function GameCanvas() {
           </div>
           <div className="storm-readout">
               <span className="eyebrow">たんけんモード</span>
-              <strong id="storm-timer">STEP 4 // ひろう</strong>
+              <strong id="storm-timer">はじまりの遺跡</strong>
               <small className="rig-status">3Dプレイヤー</small>
 
           </div>
           <div className="remaining-readout">
-            <span className="eyebrow">のこり</span>
-            <strong>自由にたんけん</strong>
+            <span className="eyebrow">ダンジョン</span>
+            <strong>はじまりの遺跡</strong>
           </div>
         </header>
 
@@ -148,6 +149,8 @@ export default function GameCanvas() {
           <div className="threat-card"><span>エリア</span><b id="zone-status">安全</b></div>
         </aside>
 
+        <section className="dungeon-objective" aria-live="polite"><span>いまの目標</span><strong id="dungeon-objective">敵を3体たおそう！</strong></section>
+        <section id="boss-panel" className="boss-panel" aria-label="ボスのHP"><div><span id="boss-name">ボス</span><b id="boss-hp-value">0 / 0</b></div><div className="boss-meter"><i id="boss-hp-fill" /></div></section>
         <section className="vitals-panel" aria-label="プレイヤー状態">
           <div className="vital-row"><span>HP</span><div className="meter"><i id="health-fill" /></div><b id="health-value">100</b></div>
           <div className="vital-row shield"><span>SH</span><div className="meter"><i id="shield-fill" /></div><b id="shield-value">50</b></div>
@@ -185,8 +188,8 @@ export default function GameCanvas() {
             <p className="kicker">SOLO EXPEDITION // RIFT-07</p>
             <h1>嵐の外縁で、<em>次の一手</em>を奪え。</h1>
             <p className="launch-copy">浮遊群島に降下し、物資を確保せよ。電磁嵐が収束する前に、最後の生存者を決める。</p>
-            <button type="button" className="launch-button" onClick={beginMatch}>ゲーム開始 <span>↗</span></button>
-            <p className="launch-note">STEP 4 — ひろう・持つ・使う</p>
+            <button type="button" className="launch-button" onClick={beginMatch}>はじまりの遺跡を開始 <span>↗</span></button>
+            <p className="launch-note">敵をたおして、いちばん奥を目指そう！</p>
           </div>
           <aside className="avatar-chooser" aria-label="降下アバター選択">
             <div className="chooser-heading"><span>DEPLOYMENT LOADOUT</span><strong>アバターを選択</strong></div>
@@ -209,9 +212,10 @@ export default function GameCanvas() {
       {outcome && (
         <section className="result-screen">
           <img src={LOGO_URL} alt="" />
-                      <p>{outcome === "victory" ? "エリアを守ったよ" : "たおれてしまった"}</p>
-            <h2>{outcome === "victory" ? "さいごまで生きのびた" : "もう一度ちょうせんしよう"}</h2>
-            <button type="button" onClick={() => window.location.reload()}>もう一度</button>
+                      <p>{outcome === "victory" ? "ダンジョンクリア！" : "ゲームオーバー"}</p>
+            <h2>{outcome === "victory" ? "はじまりの遺跡をクリアしたよ" : "もう一度ちょうせんしよう"}</h2>
+            <div className="result-stats"><span>たおした敵：<b id="result-elims">0</b>体</span><span>クリア時間：<b id="result-time">--:--</b></span><span>コイン：<b id="result-coins">100</b></span></div>
+            <div className="result-actions"><button type="button" onClick={() => window.location.reload()}>もう一度</button><button type="button" onClick={() => { window.history.replaceState({}, "", window.location.pathname); window.location.reload(); }}>もどる</button></div>
 
         </section>
       )}

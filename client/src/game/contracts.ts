@@ -8,7 +8,7 @@ export type WeaponDefinition = { id: WeaponId; name: string; damage: number; mag
 export type WeaponState = { magazine: number; reserve: number; cooldown: number; reloadTimer: number; isReloading: boolean; equipped: WeaponId | null };
 export type HealthState = { hp: number; shield: number; alive: boolean };
 export type PlayerState = { position: Vector3; velocity: Vector3; verticalVelocity: number; grounded: boolean; crouching: boolean; aiming: boolean; motion: MotionState; health: HealthState };
-export type HudSnapshot = { hp: number; maxHp: number; shield: number; ammo: number; reserve: number; remaining: number; elims: number; zone: string; motion: MotionState; aiming: boolean; crouching: boolean; pickup: string; weaponName?: string; slots?: Array<WeaponId | null>; medkits?: number };
+export type HudSnapshot = { hp: number; maxHp: number; shield: number; ammo: number; reserve: number; remaining: number; elims: number; zone: string; motion: MotionState; aiming: boolean; crouching: boolean; pickup: string; objective?: string; bossHp?: number; bossMaxHp?: number; weaponName?: string; slots?: Array<WeaponId | null>; medkits?: number };
 
 export type FireRequest = { origin: Vector3; direction: Vector3; damage: number };
 export type InputSource = { sample: () => import("./InputManager").InputSnapshot; dispose: () => void };

@@ -53,7 +53,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "full"; avatarId: string; onResult: (outcome: MatchOutcome) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; avatarId: string; onResult: (outcome: MatchOutcome) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -65,7 +65,7 @@ type Projectile = {
 
 type Pickup = {
   root: TransformNode;
-  type: "weapon" | "ammo" | "shield" | "med";
+  type: "weapon" | "ammo" | "shield" | "med" | "key" | "chest";
   weaponId?: import("./contracts").WeaponId;
   ammoType?: "medium" | "light" | "shells";
   label: string;
@@ -103,6 +103,7 @@ class Combatant {
   private poseTime = 0;
   private baseScale = 1;
   hp = 100;
+  maxHp = ENEMY_MAX_HP;
   shield = 50;
   alive = true;
   flash = 0;
@@ -235,7 +236,7 @@ class Combatant {
     context.textAlign = "center";
     context.fillText(this.id.toUpperCase(), 128, 23);
     context.font = "bold 22px Arial";
-    context.fillText(`${Math.ceil(this.hp)} / ${ENEMY_MAX_HP}`, 128, 49);
+    context.fillText(`${Math.ceil(this.hp)} / ${this.maxHp}`, 128, 49);
     this.hpTexture.update(false);
   }
 
@@ -359,6 +360,7 @@ class Combatant {
 class Rival extends Combatant {
   aiState: import("./contracts").EnemyState = "IDLE";
   private fireCooldown = 0.65 + Math.random() * 0.35;
+  attackDamage = ENEMY_ATTACK_DAMAGE;
   private stateTimer = 1.5 + Math.random() * 1.5;
   private lostTimer = 0;
   private lastSeen = new Vector3();
@@ -428,7 +430,7 @@ class Rival extends Combatant {
       this.faceToward(player.root.position);
       if (visible && distance <= ENEMY_ATTACK_RANGE && this.fireCooldown <= 0) {
         const direction = playerAim.subtract(eye).normalize();
-        world.spawnProjectile(eye.add(direction.scale(0.8)), direction, "rival", ENEMY_ATTACK_DAMAGE);
+        world.spawnProjectile(eye.add(direction.scale(0.8)), direction, "rival", this.attackDamage);
         this.fireCooldown = ENEMY_ATTACK_INTERVAL;
       }
     }
@@ -512,6 +514,14 @@ export class GameWorld {
   private medkitTimer = 0;
   private nearbyPickup?: Pickup;
   private selectedCharacterId: string;
+  private dungeonArea = 1;
+  private dungeonTransition = 0;
+  private dungeonKey = false;
+  private dungeonChest = false;
+  private dungeonStartedAt = 0;
+  private boss?: Rival;
+  private dungeonWave: Rival[] = [];
+  private dungeonObjective = "敵を3体たおそう！";
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
@@ -541,11 +551,14 @@ export class GameWorld {
       this.pushEvent(this.debugGodMode ? "DEBUG GOD MODE ON" : "DEBUG GOD MODE OFF");
     });
     this.selectedCharacterId = options.avatarId;
+    this.debugGodMode = options.demo;
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout(this.selectedCharacterId);
-    this.player.hp = options.step === "step3" || options.step === "step4" ? PLAYER_MAX_HP : 100;
-    this.player.shield = options.step === "step3" || options.step === "step4" ? 0 : 65;
-    if (options.step === "full" || options.step === "step3" || options.step === "step4") {
+    this.player.hp = options.step === "step3" || options.step === "step4" || options.step === "step5" ? PLAYER_MAX_HP : 100;
+    this.player.shield = options.step === "step3" || options.step === "step4" || options.step === "step5" ? 0 : 65;
+    if (options.step === "step5") {
+      this.createDungeonAreaOne();
+    } else if (options.step === "full" || options.step === "step3" || options.step === "step4") {
       this.createRivals();
       if (options.step === "full" || options.step === "step4") {
         this.createPickups();
@@ -562,7 +575,7 @@ export class GameWorld {
     scene.activeCamera = this.camera;
     this.cameraController = new CameraController(this.camera, this.obstacles);
     this.weaponSystem = new WeaponSystem();
-    const startsArmed = options.step === "step3" || options.step === "full" || (options.step === "step4" && DEBUG_START_WITH_WEAPON);
+    const startsArmed = options.step === "step3" || options.step === "full" || ((options.step === "step4" || options.step === "step5") && DEBUG_START_WITH_WEAPON);
     if (startsArmed) {
       this.weaponSystem.equip("assault", 120);
       this.player.setWeaponVisible(true);
@@ -577,8 +590,10 @@ export class GameWorld {
   start() {
     if (this.mode !== "briefing") return;
     this.mode = "playing";
-    this.announcement = "裂け目への降下を確認";
-    this.pushEvent("エリア RIFT-07 に着地");
+    this.dungeonStartedAt = performance.now();
+    this.announcement = this.options.step === "step5" ? "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！" : "裂け目への降下を確認";
+    this.dungeonObjective = this.options.step === "step5" ? "敵を3体たおそう！" : this.dungeonObjective;
+    this.pushEvent(this.options.step === "step5" ? "はじまりの遺跡へようこそ！" : "エリア RIFT-07 に着地");
   }
 
   setPlayerAvatar(avatarId: string) {
@@ -595,10 +610,11 @@ export class GameWorld {
       this.elapsed += delta;
       if (this.options.step === "full") this.updateStorm(delta);
       this.updatePlayer(delta);
-      if (this.options.step === "full" || this.options.step === "step3" || this.options.step === "step4") {
+      if (this.options.step === "full" || this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5") {
         this.enemyDirector.update(delta, this);
         this.updateProjectiles(delta);
-        if (this.options.step === "full" || this.options.step === "step4") this.updatePickups(delta);
+        if (this.options.step === "full" || this.options.step === "step4" || this.options.step === "step5") this.updatePickups(delta);
+        if (this.options.step === "step5") this.updateDungeonProgress(delta);
         this.checkEndState();
       } else if (this.options.step === "step2") {
         this.updateProjectiles(delta);
@@ -1010,6 +1026,121 @@ export class GameWorld {
     });
   }
 
+  private createDungeonAreaOne() {
+    this.createDungeonDoor(6);
+    this.createDungeonDoor(-12);
+    this.createDungeonDoor(-42);
+    this.createDungeonDoor(-72);
+    this.spawnDungeonWave([
+      new Vector3(-6, 0, 22),
+      new Vector3(6, 0, 18),
+      new Vector3(0, 0, 10),
+    ], "area1");
+    this.dungeonObjective = "敵を3体たおそう！";
+  }
+
+  private createDungeonDoor(z: number) {
+    const door = MeshBuilder.CreateBox(`dungeon-door-${z}`, { width: 5.4, height: 3.4, depth: 0.35 }, this.scene);
+    door.position.set(0, 1.7, z);
+    const material = new StandardMaterial(`dungeon-door-material-${z}`, this.scene);
+    material.diffuseColor = new Color3(0.16, 0.22, 0.26);
+    material.emissiveColor = new Color3(0.02, 0.08, 0.09);
+    door.material = material;
+    door.metadata = { dungeonDoor: true, z };
+  }
+
+  private spawnDungeonWave(positions: Vector3[], prefix: string) {
+    this.dungeonWave = [];
+    positions.forEach((position, index) => {
+      const rival = new Rival(this.scene, `${prefix}-${index + 1}`, position);
+      rival.applyLoadout(index % 2 === 0 ? "rustjaw" : "veil");
+      rival.shield = 0;
+      rival.hp = ENEMY_MAX_HP;
+      rival.maxHp = ENEMY_MAX_HP;
+      this.rivals.push(rival);
+      this.dungeonWave.push(rival);
+    });
+  }
+
+  private createDungeonPickup(position: Vector3, type: Pickup["type"], label: string, amount?: number, ammoType?: Pickup["ammoType"]) {
+    const root = new TransformNode(`dungeon-pickup-${type}-${this.pickups.length}`, this.scene);
+    root.position.copyFrom(position);
+    const material = new StandardMaterial(`dungeon-pickup-material-${this.pickups.length}`, this.scene);
+    material.diffuseColor = type === "key" ? AMBER : type === "chest" ? new Color3(0.8, 0.45, 0.12) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
+    material.emissiveColor = material.diffuseColor.scale(0.35);
+    const base = MeshBuilder.CreateBox(`dungeon-pickup-base-${this.pickups.length}`, { width: type === "chest" ? 1.6 : 0.72, height: type === "chest" ? 0.9 : 0.5, depth: type === "chest" ? 1.0 : 0.62 }, this.scene);
+    base.parent = root;
+    base.position.y = type === "chest" ? 0.45 : 0.25;
+    base.material = material;
+    const ring = MeshBuilder.CreateTorus(`dungeon-pickup-ring-${this.pickups.length}`, { diameter: type === "chest" ? 2.1 : 1.25, thickness: 0.035, tessellation: 20 }, this.scene);
+    ring.parent = root;
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.04;
+    ring.material = material;
+    this.pickups.push({ root, type, label, amount, ammoType, collected: false });
+  }
+
+  private updateDungeonProgress(delta: number) {
+    if (this.options.step !== "step5") return;
+    if (this.dungeonTransition > 0) {
+      this.dungeonTransition = Math.max(0, this.dungeonTransition - delta);
+      return;
+    }
+    if (this.dungeonArea === 1 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
+      this.dungeonArea = 2;
+      this.dungeonObjective = "カギを見つけよう！";
+      this.announcement = "クリア！ 次の部屋へ進もう！";
+      this.openDungeonDoor(6);
+      this.createDungeonPickup(new Vector3(0, 0.75, -4), "key", "カギ");
+      this.dungeonTransition = 1.2;
+      this.pushEvent("次の部屋へ進もう！");
+    } else if (this.dungeonArea === 2 && this.dungeonKey) {
+      this.dungeonArea = 3;
+      this.dungeonObjective = "敵をぜんぶたおそう！";
+      this.openDungeonDoor(-12);
+      this.spawnDungeonWave([
+        new Vector3(-8, 0, -24), new Vector3(8, 0, -26), new Vector3(-5, 0, -34),
+        new Vector3(5, 0, -36),
+      ], "area3");
+      this.dungeonTransition = 1.2;
+      this.pushEvent("エリア3へ進もう！");
+    } else if (this.dungeonArea === 3 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
+      this.dungeonArea = 4;
+      this.dungeonObjective = "ボス部屋へ進もう！";
+      this.openDungeonDoor(-42);
+      this.createDungeonPickup(new Vector3(-4, 0.75, -50), "ammo", "弾薬", 60, "medium");
+      this.createDungeonPickup(new Vector3(4, 0.75, -50), "med", "回復キット", 1);
+      this.dungeonTransition = 1.2;
+      this.pushEvent("ボスへの道がひらいた！");
+    } else if (this.dungeonArea === 4) {
+      const boss = new Rival(this.scene, "boss", new Vector3(0, 0, -78));
+      boss.applyLoadout("rustjaw");
+      boss.root.scaling.setAll(1.7);
+      boss.shield = 0;
+      boss.hp = 400;
+      boss.maxHp = 400;
+      boss.attackDamage = 14;
+      this.rivals.push(boss);
+      this.boss = boss;
+      this.dungeonWave = [boss];
+      this.dungeonArea = 5;
+      this.dungeonObjective = "ボスをたおそう！";
+      this.announcement = "ボスがあらわれた！";
+      this.pushEvent("ボスがあらわれた！");
+    } else if (this.dungeonArea === 5 && this.boss && !this.boss.alive && !this.dungeonChest) {
+      this.dungeonArea = 6;
+      this.dungeonChest = true;
+      this.dungeonObjective = "宝箱をあけよう！";
+      this.announcement = "ボスをたおした！ 宝箱をあけよう！";
+      this.createDungeonPickup(new Vector3(0, 0.75, -78), "chest", "宝箱");
+      this.pushEvent("ボスをたおした！");
+    }
+  }
+
+  private openDungeonDoor(z: number) {
+    this.scene.meshes.filter((mesh) => mesh.metadata?.dungeonDoor && mesh.metadata.z === z).forEach((mesh) => mesh.setEnabled(false));
+  }
+
   private createRivals() {
     const placements = this.options.step === "step3"
       ? [new Vector3(-26, 0, 18), new Vector3(29, 0, 10), new Vector3(-10, 0, -34)]
@@ -1117,7 +1248,7 @@ export class GameWorld {
       return;
     }
     const rawSnapshot = this.options.demo ? this.demoInput() : this.touchInput.isActive() ? this.touchInput.snapshot() : this.input.snapshot();
-    if (this.options.step === "step4") {
+    if (this.options.step === "step4" || this.options.step === "step5") {
       if (rawSnapshot.slotPressed) this.switchWeapon(rawSnapshot.slotPressed);
       if (rawSnapshot.pickupPressed) this.pickupNearest();
       if (rawSnapshot.medkitPressed) this.beginMedkit();
@@ -1265,7 +1396,15 @@ export class GameWorld {
     }
     pickup.collected = true;
     pickup.root.setEnabled(false);
-    if (pickup.type === "weapon" && pickup.weaponId) {
+    if (pickup.type === "key") {
+      this.dungeonKey = true;
+      this.dungeonObjective = "カギを手に入れた！ 次の部屋へ進もう！";
+      this.announcement = "カギを手に入れた！";
+    } else if (pickup.type === "chest") {
+      this.announcement = "コイン ×100　回復　弾薬";
+      this.pushEvent(this.announcement);
+      this.finish("victory");
+    } else if (pickup.type === "weapon" && pickup.weaponId) {
       this.weaponSystem.equip(pickup.weaponId, 90);
       this.player.setWeaponVisible(true);
       this.announcement = `${pickup.label}をひろった`;
@@ -1359,7 +1498,7 @@ export class GameWorld {
 
   private checkEndState() {
     if (!this.player.alive) this.finish("defeat");
-    else if (this.rivals.length > 0 && this.rivals.every((rival) => !rival.alive)) this.finish("victory");
+    else if (this.options.step !== "step5" && this.rivals.length > 0 && this.rivals.every((rival) => !rival.alive)) this.finish("victory");
   }
 
   private showPlayerDamage(hitPosition: Vector3) {
@@ -1378,6 +1517,13 @@ export class GameWorld {
     if (this.resultSent) return;
     this.resultSent = true;
     this.mode = outcome;
+    if (this.options.step === "step5") {
+      const time = Math.max(0, Math.floor((performance.now() - this.dungeonStartedAt) / 1000));
+      const timeElement = document.getElementById("result-time");
+      const elimsElement = document.getElementById("result-elims");
+      if (timeElement) timeElement.textContent = `${Math.floor(time / 60)}:${String(time % 60).padStart(2, "0")}`;
+      if (elimsElement) elimsElement.textContent = String(this.elims);
+    }
     this.options.onResult(outcome);
   }
 
@@ -1395,10 +1541,10 @@ export class GameWorld {
   }
 
   private updateHud(_force = false) {
-    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `遺跡 エリア${Math.min(4, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
-      maxHp: this.options.step === "step3" || this.options.step === "step4" ? PLAYER_MAX_HP : 100,
+      maxHp: this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5" ? PLAYER_MAX_HP : 100,
       shield: this.player.shield,
       ammo: this.weaponSystem.state.magazine,
       reserve: this.weaponSystem.state.reserve,
@@ -1409,8 +1555,10 @@ export class GameWorld {
       aiming: this.playerController.aiming,
       crouching: this.playerController.crouching,
       pickup: this.announcement,
-             weaponName: this.weaponSystem.definition()?.name ?? "武器なし",
-
+      objective: this.options.step === "step5" ? this.dungeonObjective : undefined,
+      bossHp: this.options.step === "step5" && this.boss?.alive ? this.boss.hp : undefined,
+      bossMaxHp: this.options.step === "step5" && this.boss?.alive ? this.boss.maxHp : undefined,
+      weaponName: this.weaponSystem.definition()?.name ?? "武器なし",
       slots: this.weaponSystem.slots(),
       medkits: this.medkits,
     }, this.player.root.position, this.stormRadius);
