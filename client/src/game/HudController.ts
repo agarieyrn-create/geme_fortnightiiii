@@ -23,7 +23,7 @@ export class HudController {
     setText("motion-state", snapshot.motion);
     setText("crouch-state", snapshot.crouching ? "CROUCH" : "STAND");
     setText("aim-status", snapshot.aiming ? "AIM" : "HIP");
-    setWidth("health-fill", snapshot.hp);
+    setWidth("health-fill", (snapshot.hp / Math.max(1, snapshot.maxHp)) * 100);
     setWidth("shield-fill", snapshot.shield);
     const miniPlayer = document.getElementById("mini-player") as HTMLElement | null;
     if (miniPlayer) {

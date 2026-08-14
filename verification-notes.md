@@ -66,3 +66,13 @@ STEP 3を起動モードに切り替え、敵を3体（RUSTJAW、VEIL、ANKER）
 敵攻撃は射程25、15ダメージ、約0.72秒間隔。STEP 3ではプレイヤーシールドを0、HPを100として敵弾を実HPへ接続した。被弾時にHPバー減少、画面赤フラッシュ、Hit Directionマーカー、Camera反応を表示する。HP0でPLAYER DEAD、入力・移動・射撃停止、敵の攻撃対象解除、GAME OVER結果画面、RETRYを表示する。
 
 プレイヤーのDamage25は敵HP100へ接続し、4発でDEAD。死亡時は攻撃・移動・Colliderを停止し、敵モデルを倒れた姿勢で残す。撃破時にELIMSを1増加する。PC 1280x720とモバイル390x844のSTEP 3デモを確認し、敵表示、プレイヤーHP減少、HP／ELIMS HUD、既存Aim／Fire／Reload UI、PLAYER DEAD／RETRYを確認した。TypeScriptチェックと本番ビルドも成功。大量敵、ボス、アイテム、建築、ストーム、オンライン対戦は追加していない。
+
+## STEP 3 戦闘テストバランス調整
+
+テスト用定数として`PLAYER_MAX_HP = 300`、`PLAYER_WEAPON_RANGE = 500`、`PLAYER_WEAPON_DAMAGE = 25`、`ENEMY_ATTACK_RANGE = 25`、`ENEMY_ATTACK_DAMAGE = 10`、`ENEMY_ATTACK_INTERVAL = 1.15`を追加した。STEP 3プレイヤーHPは300、シールド0で初期化し、HudControllerは`hp / maxHp`でHPバーを描画するため、300を最大値として正しく連動する。
+
+GOD MODEはHUD右下の小さな`GOD: OFF/ON`ボタンから切替可能。ONでも敵弾の衝突、被弾フラッシュ、方向表示、`-10 HP (GOD BLOCKED)`イベントは発生するが、実HPは減少しない。OFFでは通常通りHPが10減少する。敵への命中時は`-25 HP`をイベントフィードへ表示する。
+
+プレイヤー射撃の中央Raycastは500単位まで延長し、Tracerは命中地点または500単位のAimPointまで描画する。敵攻撃の射程25・間隔1.15秒はプレイヤー射程と独立している。敵3体はプレイヤー位置からNear／Medium／Far相当の配置を維持し、遠距離射撃テストが可能な状態にした。
+
+390x844モバイル画面で敵表示、HPバー、複数の`-10 HP`表示、GOD切替、既存Aim／Fire／Reload／移動UIを確認した。TypeScriptチェックと本番ビルドに成功。グラフィック、モデル、武器モデル、マップ、新しい敵AI、アイテム、武器追加は変更していない。

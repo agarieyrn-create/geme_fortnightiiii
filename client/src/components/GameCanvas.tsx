@@ -156,6 +156,7 @@ export default function GameCanvas() {
         </section>
 
         <div id="input-debug" className="input-debug" role="status" aria-live="polite" />
+        <button id="god-mode-toggle" className="god-mode-toggle" type="button" aria-pressed="false">GOD: OFF</button>
         <div className="crosshair" aria-hidden="true"><i /><b /></div>
         <div className="state-chip"><span>MOVE STATE</span><strong id="motion-state">IDLE</strong><i id="crouch-state">STAND</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>
@@ -170,8 +171,8 @@ export default function GameCanvas() {
             <p className="kicker">SOLO EXPEDITION // RIFT-07</p>
             <h1>嵐の外縁で、<em>次の一手</em>を奪え。</h1>
             <p className="launch-copy">浮遊群島に降下し、物資を確保せよ。電磁嵐が収束する前に、最後の生存者を決める。</p>
-            <button type="button" className="launch-button" onClick={beginMatch}>STEP 2を開始 <span>↗</span></button>
-            <p className="launch-note">STEP 2 — LIVE FIRE / 5体の射撃訓練ターゲット</p>
+            <button type="button" className="launch-button" onClick={beginMatch}>STEP 3を開始 <span>↗</span></button>
+            <p className="launch-note">STEP 3 — HOSTILE CONTACT / 3体の敵AI</p>
           </div>
           <aside className="avatar-chooser" aria-label="降下アバター選択">
             <div className="chooser-heading"><span>DEPLOYMENT LOADOUT</span><strong>アバターを選択</strong></div>

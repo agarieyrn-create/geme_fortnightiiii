@@ -6,7 +6,7 @@ export type EnemyState = "IDLE" | "PATROL" | "ALERT" | "CHASE" | "ATTACK" | "DEA
 export type WeaponState = { magazine: number; reserve: number; cooldown: number; reloadTimer: number; isReloading: boolean };
 export type HealthState = { hp: number; shield: number; alive: boolean };
 export type PlayerState = { position: Vector3; velocity: Vector3; verticalVelocity: number; grounded: boolean; crouching: boolean; aiming: boolean; motion: MotionState; health: HealthState };
-export type HudSnapshot = { hp: number; shield: number; ammo: number; reserve: number; remaining: number; elims: number; zone: string; motion: MotionState; aiming: boolean; crouching: boolean; pickup: string };
+export type HudSnapshot = { hp: number; maxHp: number; shield: number; ammo: number; reserve: number; remaining: number; elims: number; zone: string; motion: MotionState; aiming: boolean; crouching: boolean; pickup: string };
 
 export type FireRequest = { origin: Vector3; direction: Vector3; damage: number };
 export type InputSource = { sample: () => import("./InputManager").InputSnapshot; dispose: () => void };

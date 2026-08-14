@@ -134,3 +134,8 @@ button { font: inherit; }
   .result-screen { padding: 24px 18px; text-align: center; }
   .result-screen h2 { max-width: 92vw; font-size: clamp(23px, 7vw, 36px); line-height: 1.25; }
 }
+
+/* STEP 3 test-only control: compact and unobtrusive. */
+.god-mode-toggle { position: absolute; right: 14px; bottom: 14px; z-index: 12; padding: 4px 7px; border: 1px solid rgba(255, 196, 92, .35); background: rgba(5, 13, 24, .78); color: #b8c4ca; font: 700 8px/1 "Chakra Petch", sans-serif; letter-spacing: .08em; }
+.god-mode-toggle[aria-pressed="true"] { border-color: #ffd36d; color: #ffd36d; box-shadow: 0 0 12px rgba(255, 190, 80, .24); }
+@media (max-width: 720px) { .god-mode-toggle { right: 14px; bottom: 9px; transform: scale(.9); transform-origin: bottom right; } }

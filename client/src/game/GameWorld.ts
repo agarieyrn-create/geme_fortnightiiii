@@ -30,6 +30,13 @@ const SAND = new Color3(0.31, 0.12, 0.035);
 const BASALT = new Color3(0.12, 0.055, 0.023);
 const RUST = new Color3(0.77, 0.16, 0.1);
 
+const PLAYER_MAX_HP = 300;
+const PLAYER_WEAPON_RANGE = 500;
+const PLAYER_WEAPON_DAMAGE = 25;
+const ENEMY_ATTACK_RANGE = 25;
+const ENEMY_ATTACK_DAMAGE = 10;
+const ENEMY_ATTACK_INTERVAL = 1.15;
+
 const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: Color3; cloak: Color3; scale: number }> = {
   kairo: { suit: new Color3(0.14, 0.18, 0.23), armor: new Color3(0.39, 0.29, 0.18), accent: TEAL, cloak: new Color3(0.34, 0.25, 0.15), scale: 1 },
   haze: { suit: new Color3(0.11, 0.16, 0.22), armor: new Color3(0.17, 0.35, 0.4), accent: new Color3(0.06, 0.84, 0.77), cloak: new Color3(0.12, 0.27, 0.34), scale: 0.9 },
@@ -357,10 +364,10 @@ class Rival extends Combatant {
     if (this.aiState === "ALERT") this.faceToward(this.lastSeen);
     if (this.aiState === "ATTACK") {
       this.faceToward(player.root.position);
-      if (visible && distance <= 25 && this.fireCooldown <= 0) {
+      if (visible && distance <= ENEMY_ATTACK_RANGE && this.fireCooldown <= 0) {
         const direction = playerAim.subtract(eye).normalize();
-        world.spawnProjectile(eye.add(direction.scale(0.8)), direction, "rival", 15);
-        this.fireCooldown = 0.72;
+        world.spawnProjectile(eye.add(direction.scale(0.8)), direction, "rival", ENEMY_ATTACK_DAMAGE);
+        this.fireCooldown = ENEMY_ATTACK_INTERVAL;
       }
     }
     this.setMotionState(this.aiState === "PATROL" || this.aiState === "CHASE" ? "WALK_FORWARD" : this.aiState);
@@ -438,6 +445,7 @@ export class GameWorld {
   private lastMotionState = "IDLE";
   private currentAiming = false;
   private currentCrouching = false;
+  private debugGodMode = false;
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
@@ -459,8 +467,16 @@ export class GameWorld {
 
     this.input = new InputManager(canvas);
     this.touchInput = new TouchInputManager(canvas);
+    const godToggle = document.getElementById("god-mode-toggle");
+    godToggle?.addEventListener("click", () => {
+      this.debugGodMode = !this.debugGodMode;
+      godToggle.textContent = this.debugGodMode ? "GOD: ON" : "GOD: OFF";
+      godToggle.setAttribute("aria-pressed", String(this.debugGodMode));
+      this.pushEvent(this.debugGodMode ? "DEBUG GOD MODE ON" : "DEBUG GOD MODE OFF");
+    });
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout("kairo");
+    this.player.hp = options.step === "step3" ? PLAYER_MAX_HP : 100;
     this.player.shield = options.step === "step3" ? 0 : 65;
     if (options.step === "full" || options.step === "step3") {
       this.createRivals();
@@ -520,13 +536,12 @@ export class GameWorld {
   }
 
   private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3) {
-    const maxShootDistance = 250;
     const direction = cameraDirection.normalize();
-    const ray = new Ray(this.camera.position, direction, maxShootDistance);
+    const ray = new Ray(this.camera.position, direction, PLAYER_WEAPON_RANGE);
     const pick = this.scene.pickWithRay(ray, (mesh) => Boolean(mesh.metadata?.trainingTargetId));
-    const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(direction.scale(maxShootDistance));
+    const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(direction.scale(PLAYER_WEAPON_RANGE));
     const shotDirection = aimPoint.subtract(origin).normalize();
-    this.spawnProjectile(origin, shotDirection, "player", 25);
+    this.spawnProjectile(origin, shotDirection, "player", PLAYER_WEAPON_DAMAGE);
     this.playShotSound();
     this.cameraController.addRecoil(0.014);
     const tracer = MeshBuilder.CreateLines("bullet-tracer", { points: [origin, aimPoint] }, this.scene);
@@ -1076,6 +1091,7 @@ export class GameWorld {
         if (target) {
           const eliminated = target.applyDamage(projectile.damage);
           this.showHitMarker();
+          this.pushEvent(`-${projectile.damage} HP`);
           this.createImpact(projectile.mesh.position, eliminated);
           if (eliminated) {
             this.elims += 1;
@@ -1098,8 +1114,9 @@ export class GameWorld {
           }
         }
       } else if (this.player.alive && Vector3.DistanceSquared(projectile.mesh.position, this.player.root.position.add(new Vector3(0, 1, 0))) < 1.45) {
-        const eliminated = this.player.applyDamage(projectile.damage);
+        const eliminated = this.debugGodMode ? false : this.player.applyDamage(projectile.damage);
         this.showPlayerDamage(projectile.mesh.position);
+        this.pushEvent(this.debugGodMode ? `-${projectile.damage} HP (GOD BLOCKED)` : `-${projectile.damage} HP`);
         if (eliminated) this.pushEvent("PLAYER DEAD");
         hit = true;
       }
@@ -1204,6 +1221,7 @@ export class GameWorld {
     const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
+      maxHp: this.options.step === "step3" ? PLAYER_MAX_HP : 100,
       shield: this.player.shield,
       ammo: this.weaponSystem.state.magazine,
       reserve: this.weaponSystem.state.reserve,
