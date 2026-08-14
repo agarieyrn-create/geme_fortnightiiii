@@ -1062,6 +1062,8 @@ export class GameWorld {
 
   private updatePlayer(delta: number) {
     if (!this.player.alive) {
+      this.input.reset();
+      this.touchInput.reset();
       this.currentAiming = false;
       this.currentCrouching = false;
       return;

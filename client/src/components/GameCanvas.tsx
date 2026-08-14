@@ -156,6 +156,7 @@ export default function GameCanvas() {
         </section>
 
         <div id="input-debug" className="input-debug" role="status" aria-live="polite" />
+        <div id="move-input-debug" className="move-input-debug" role="status" aria-live="polite">Move Input: X: 0.00 Y: 0.00</div>
         <button id="god-mode-toggle" className="god-mode-toggle" type="button" aria-pressed="false">GOD: OFF</button>
         <div className="crosshair" aria-hidden="true"><i /><b /></div>
         <div className="state-chip"><span>MOVE STATE</span><strong id="motion-state">IDLE</strong><i id="crouch-state">STAND</i></div>

@@ -84,3 +84,11 @@ GOD MODEはHUD右下の小さな`GOD: OFF/ON`ボタンから切替可能。ONで
 敵Colliderには`enemyId`を付与し、死亡済みRivalは`containsPoint()`と`applyDamage()`の両方で拒否する。HP0ではDEAD、攻撃・追跡・移動停止、Collider停止、倒れた姿勢、ELIMS+1を実行し、後続射撃でELIMSが増えない。プレイヤー弾の表示用Projectile寿命もPLAYER_WEAPON_RANGE／速度から計算し、長距離の実弾到達制限を解消した。
 
 敵頭上にはDynamicTextureのビルボードHPラベルを追加し、敵名と現在HP／100を表示する。TypeScriptチェックと本番ビルドに成功し、PC STEP 3画面で敵3体、頭上HPラベル、プレイヤーHP、既存HUD、敵弾イベントを確認した。既存の移動、カメラ、AIM、FIRE、RELOAD、敵AI、マップ、モデル、UIデザインは維持した。
+
+## 移動入力解除バグ修正
+
+TouchInputManagerの移動用IDを`movementPointerId`、カメラ用IDを`cameraPointerId`として分離した。移動Pointerの`pointerup`／`pointercancel`、`touchend`／`touchcancel`、window blur、document visibilitychangeで移動値を0へ戻し、ジョイスティック表示も中央へ戻す。Pointer Captureは終了・キャンセル時に`releasePointerCapture`し、破棄時にも全入力をリセットする。AIM／FIREなどのボタンPointerは移動Pointerと混同しない。
+
+InputManagerにはkeyup状態を基準にした既存スナップショットを維持しつつ、blur／visibilitychange時のresetを追加した。GameWorldはプレイヤー死亡時にPC・モバイル両方の入力をresetする。TouchInputManagerの毎フレームスナップショットに一時`Move Input: X: 0.00 Y: 0.00`表示を追加し、入力終了後にゼロへ戻る状態を確認できるようにした。
+
+390x844モバイル画面と1280x720 PC画面で、既存の敵AI・HP・射撃・AIM／FIRE／RELOAD・移動UIが描画され、Move Inputデバッグ表示が初期0.00になることを確認した。TypeScriptチェックと本番ビルドに成功。グラフィック、モデル、武器、マップ、カメラ、敵AI、敵HP、射撃仕様、UIデザインは変更していない。

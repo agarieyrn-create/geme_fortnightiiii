@@ -139,3 +139,7 @@ button { font: inherit; }
 .god-mode-toggle { position: absolute; right: 14px; bottom: 14px; z-index: 12; padding: 4px 7px; border: 1px solid rgba(255, 196, 92, .35); background: rgba(5, 13, 24, .78); color: #b8c4ca; font: 700 8px/1 "Chakra Petch", sans-serif; letter-spacing: .08em; }
 .god-mode-toggle[aria-pressed="true"] { border-color: #ffd36d; color: #ffd36d; box-shadow: 0 0 12px rgba(255, 190, 80, .24); }
 @media (max-width: 720px) { .god-mode-toggle { right: 14px; bottom: 9px; transform: scale(.9); transform-origin: bottom right; } }
+
+/* Temporary movement-release diagnostic. */
+.move-input-debug { position: absolute; left: 14px; bottom: 18px; z-index: 12; padding: 4px 6px; border: 1px solid rgba(19, 217, 196, .25); background: rgba(3, 15, 27, .62); color: #9bd9d0; font: 8px/1.2 "Chakra Petch", monospace; pointer-events: none; }
+@media (max-width: 720px) { .move-input-debug { left: 14px; bottom: 154px; } }

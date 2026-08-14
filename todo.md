@@ -141,3 +141,11 @@
 - [ ] 死亡済み敵への追加射撃でELIMSが二重加算されないようにする。
 - [ ] Near／Medium／FarでRaycast Hit、HP減少、遠距離命中を検証する。
 - [ ] 既存の移動、カメラ、射撃、敵AI、マップ、モデル、UIを変更しない。
+
+## 移動入力解除バグ修正
+
+- [x] TouchInputManagerのmovementPointerId、pointerup／pointercancel、touchend／touchcancelを確認する。
+- [x] Pointer Captureを終了時にreleaseし、window blur／visibilitychangeで全移動入力をリセットする。
+- [x] InputManagerのkeyupとPlayerControllerの毎フレームゼロ入力を確認する。
+- [x] 一時Move Input表示を追加し、前後左右・複数タッチ・FIRE／AIM併用後の停止を検証する。
+- [x] 敵AI、敵HP、射撃、カメラ、武器、グラフィック、マップ、UIデザインは変更しない。

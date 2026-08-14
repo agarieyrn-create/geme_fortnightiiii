@@ -42,6 +42,8 @@ export class InputManager {
       if (mouse.button === 0) this.firing = false;
       if (mouse.button === 2) this.aiming = false;
     });
+    this.listen(window, "blur", () => this.reset());
+    this.listen(document, "visibilitychange", () => { if (document.hidden) this.reset(); });
     this.listen(canvas, "contextmenu", (event: Event) => event.preventDefault());
     this.listen(window, "mousemove", (event: Event) => {
       const pointer = event as MouseEvent;
@@ -77,13 +79,22 @@ export class InputManager {
     return result;
   }
 
-  dispose() {
-    this.cleanup.forEach((off) => off());
-    this.cleanup.length = 0;
+  reset() {
     this.keys.clear();
+    this.firing = false;
+    this.aiming = false;
+    this.reloadPressed = false;
+    this.lookX = 0;
+    this.lookY = 0;
   }
 
-  private listen(target: Window | HTMLCanvasElement, name: string, handler: (event: Event) => void) {
+  dispose() {
+    this.reset();
+    this.cleanup.forEach((off) => off());
+    this.cleanup.length = 0;
+  }
+
+  private listen(target: EventTarget, name: string, handler: (event: Event) => void) {
     target.addEventListener(name, handler);
     this.cleanup.push(() => target.removeEventListener(name, handler));
   }
