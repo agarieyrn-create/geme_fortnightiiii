@@ -251,3 +251,40 @@ button { font: inherit; }
   .dungeon-objective strong { font-size: 12px; }
   .boss-panel { top: 16px; width: 220px; }
 }
+
+/* STEP 6 hub loop: child-friendly, edge-aligned Japanese menus with clear progression feedback. */
+.hub-screen { align-items: stretch; justify-content: space-between; gap: 24px; padding: clamp(24px, 6vw, 76px); }
+.hub-card { width: min(520px, 92vw); padding: clamp(22px, 4vw, 44px); border: 1px solid rgba(19,217,196,.35); background: rgba(3,12,24,.8); backdrop-filter: blur(10px); }
+.hub-card h1 { margin: 12px 0; color: #f4fbfb; font-size: clamp(28px, 4vw, 52px); }
+.coin-readout { display: inline-flex; gap: 10px; margin: 4px 0 14px; color: #9eb9bd; font-weight: 700; }
+.coin-readout strong { color: #ffd36a; }
+.hub-notice { margin: 8px 0; color: #ffe27a; font-weight: 700; }
+.hub-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.hub-menu button, .dungeon-card, .hub-back, .upgrade-card button { min-height: 48px; border: 1px solid rgba(19,217,196,.5); background: rgba(12,42,54,.84); color: #f6ffff; font: 700 15px "Noto Sans JP", sans-serif; cursor: pointer; }
+.hub-menu button:hover, .dungeon-card:hover, .hub-back:hover { background: #12cdbb; color: #03131b; }
+.hub-panel { display: grid; gap: 12px; margin-top: 16px; }
+.dungeon-card { display: grid; gap: 5px; padding: 15px; text-align: left; }
+.dungeon-card strong { color: #fff2bb; font-size: 19px; }
+.dungeon-card span { color: #c7d8da; font-size: 12px; }
+.dungeon-card b { justify-self: start; color: #63e5d5; font-size: 12px; }
+.locked-dungeons { display: flex; gap: 8px; }
+.locked-dungeons span { flex: 1; padding: 12px 4px; border: 1px dashed rgba(255,255,255,.25); color: #83999d; text-align: center; }
+.hub-back { padding: 8px 14px; }
+.upgrade-list { gap: 8px; }
+.upgrade-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid rgba(255,255,255,.15); background: rgba(6,25,38,.8); }
+.upgrade-card > div { display: grid; gap: 2px; }
+.upgrade-card strong { color: #fff1ba; }
+.upgrade-card span, .upgrade-card small { color: #b7cacc; font-size: 11px; }
+.upgrade-card button { min-width: 92px; min-height: 38px; padding: 4px 8px; font-size: 11px; }
+.upgrade-card button:disabled { opacity: .45; cursor: not-allowed; }
+.loadout-list { display: grid; gap: 8px; }
+.loadout-list span { padding: 12px; border-left: 3px solid #13d9c4; background: rgba(6,25,38,.8); color: #f2ffff; }
+.settings-panel label { display: grid; gap: 6px; padding: 10px; color: #d8e8e8; background: rgba(6,25,38,.8); }
+.settings-panel input { accent-color: #13d9c4; }
+@media (max-width: 767px), (pointer: coarse) {
+  .hub-screen { padding: 20px 14px; overflow-y: auto; }
+  .hub-card { width: 100%; padding: 20px; }
+  .hub-card h1 { font-size: 30px; }
+  .avatar-chooser { width: 100%; max-width: 480px; }
+  .hub-menu button { min-height: 52px; }
+}

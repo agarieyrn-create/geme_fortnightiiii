@@ -23,6 +23,7 @@ import { AnimationController } from "./AnimationController";
 import { HumanoidModelController } from "./HumanoidModelController";
 import { EnemyDirector } from "./EnemyDirector";
 import { WorldBuilder } from "./WorldBuilder";
+import type { ProgressionData } from "./Progression";
 
 const TEAL = new Color3(0.075, 0.85, 0.77);
 const AMBER = new Color3(1, 0.54, 0.15);
@@ -53,7 +54,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; avatarId: string; onResult: (outcome: MatchOutcome) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; avatarId: string; progression: ProgressionData; onResult: (outcome: MatchOutcome) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -514,6 +515,7 @@ export class GameWorld {
   private medkitTimer = 0;
   private nearbyPickup?: Pickup;
   private selectedCharacterId: string;
+  private readonly progression: ProgressionData;
   private dungeonArea = 1;
   private dungeonTransition = 0;
   private dungeonKey = false;
@@ -557,10 +559,11 @@ export class GameWorld {
       this.pushEvent(this.debugGodMode ? "DEBUG GOD MODE ON" : "DEBUG GOD MODE OFF");
     });
     this.selectedCharacterId = options.avatarId;
+    this.progression = options.progression;
     this.debugGodMode = options.demo;
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout(this.selectedCharacterId);
-    this.player.hp = options.step === "step3" || options.step === "step4" || options.step === "step5" ? PLAYER_MAX_HP : 100;
+    this.player.hp = options.step === "step3" || options.step === "step4" || options.step === "step5" ? this.playerMaxHp() : 100;
     this.player.shield = options.step === "step3" || options.step === "step4" || options.step === "step5" ? 0 : 65;
     if (options.step === "step5") {
       this.createDungeonAreaOne();
@@ -581,6 +584,8 @@ export class GameWorld {
     scene.activeCamera = this.camera;
     this.cameraController = new CameraController(this.camera, this.obstacles);
     this.weaponSystem = new WeaponSystem();
+    this.weaponSystem.damageMultiplier = 1 + Math.max(0, this.progression.attackLevel - 1) * 0.1;
+    this.weaponSystem.reloadMultiplier = Math.max(0.6, 1 - Math.max(0, this.progression.reloadLevel - 1) * 0.1);
     const startsArmed = options.step === "step3" || options.step === "full" || ((options.step === "step4" || options.step === "step5") && DEBUG_START_WITH_WEAPON);
     if (startsArmed) {
       this.weaponSystem.equip("assault", 120);
@@ -640,11 +645,15 @@ export class GameWorld {
     }
   }
 
-  private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3) {
+  private playerMaxHp() {
+    return PLAYER_MAX_HP + Math.max(0, this.progression.hpLevel - 1) * 20;
+  }
+
+  private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3, damageOverride?: number) {
     const direction = cameraDirection.normalize();
     const definition = this.weaponSystem.definition();
     const range = definition?.range ?? PLAYER_WEAPON_RANGE;
-    const damage = definition?.damage ?? PLAYER_WEAPON_DAMAGE;
+    const damage = damageOverride ?? definition?.damage ?? PLAYER_WEAPON_DAMAGE;
     const ray = new Ray(this.camera.position, direction, range);
     const pick = this.scene.pickWithRay(ray, (mesh) => Boolean(mesh.metadata?.trainingTargetId || mesh.metadata?.enemyId));
     const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(direction.scale(range));
@@ -693,7 +702,7 @@ export class GameWorld {
       const noteStart = start + index * pattern.noteLength;
       oscillator.type = pattern.type;
       oscillator.frequency.setValueAtTime(frequency, noteStart);
-      gain.gain.setValueAtTime(pattern.volume, noteStart);
+      gain.gain.setValueAtTime(pattern.volume * this.progression.sfxVolume, noteStart);
       gain.gain.exponentialRampToValueAtTime(0.001, noteStart + pattern.noteLength * 0.92);
       oscillator.connect(gain).connect(this.audioContext!.destination);
       oscillator.start(noteStart);
@@ -752,7 +761,7 @@ export class GameWorld {
     oscillator.type = "square";
     oscillator.frequency.setValueAtTime(135, this.audioContext.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(58, this.audioContext.currentTime + 0.07);
-    gain.gain.setValueAtTime(0.035, this.audioContext.currentTime);
+    gain.gain.setValueAtTime(0.035 * this.progression.sfxVolume, this.audioContext.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.08);
     oscillator.connect(gain).connect(this.audioContext.destination);
     oscillator.start();
@@ -1387,7 +1396,7 @@ export class GameWorld {
     this.medkitTimer = Math.max(0, this.medkitTimer - delta);
     const usingMedkit = this.medkitTimer > 0;
     const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : usingMedkit ? { ...rawSnapshot, forward: 0, right: 0, sprint: false, aiming: false, firing: false, jump: false } : rawSnapshot;
-    this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.fireAtAimPoint(origin, direction), (message) => this.pushEvent(message));
+    this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction, damage) => this.fireAtAimPoint(origin, direction, damage), (message) => this.pushEvent(message));
     this.currentAiming = this.playerController.aiming;
     this.currentCrouching = this.playerController.crouching;
     this.lastMotionState = this.playerController.motion;
@@ -1556,7 +1565,7 @@ export class GameWorld {
   }
 
   private beginMedkit() {
-    if (this.medkits <= 0 || this.medkitTimer > 0 || this.player.hp >= PLAYER_MAX_HP) {
+    if (this.medkits <= 0 || this.medkitTimer > 0 || this.player.hp >= this.playerMaxHp()) {
       this.pushEvent(this.medkits <= 0 ? "回復キットがないよ" : "HPはいっぱいだよ");
       return;
     }
@@ -1566,7 +1575,7 @@ export class GameWorld {
     this.pushEvent("回復をはじめたよ");
     window.setTimeout(() => {
       if (this.medkitTimer <= 0 && this.player.alive) {
-        this.player.hp = Math.min(PLAYER_MAX_HP, this.player.hp + MEDKIT_HEAL);
+        this.player.hp = Math.min(this.playerMaxHp(), this.player.hp + MEDKIT_HEAL);
         this.pushEvent(`+${MEDKIT_HEAL} HP`);
       }
     }, MEDKIT_USE_TIME * 1000);
@@ -1679,7 +1688,7 @@ export class GameWorld {
     const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `遺跡 エリア${Math.min(4, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
-      maxHp: this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5" ? PLAYER_MAX_HP : 100,
+      maxHp: this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5" ? this.playerMaxHp() : 100,
       shield: this.player.shield,
       ammo: this.weaponSystem.state.magazine,
       reserve: this.weaponSystem.state.reserve,

@@ -10,6 +10,8 @@ type MagazineState = { magazine: number; reserve: number };
 
 export class WeaponSystem {
   readonly state: WeaponState = { magazine: 0, reserve: 0, cooldown: 0, reloadTimer: 0, isReloading: false, equipped: null };
+  damageMultiplier = 1;
+  reloadMultiplier = 1;
   private readonly inventory = new Map<WeaponId, MagazineState>();
   private readonly reserves: Record<"medium" | "light" | "shells", number> = { medium: 0, light: 0, shells: 0 };
 
@@ -59,14 +61,14 @@ export class WeaponSystem {
     const definition = this.definition();
     if (!definition || this.state.isReloading || this.state.magazine >= definition.magazineSize || this.state.reserve <= 0) return false;
     this.state.isReloading = true;
-    this.state.reloadTimer = definition.id === "shotgun" ? 1.1 : 0.82;
+    this.state.reloadTimer = (definition.id === "shotgun" ? 1.1 : 0.82) * this.reloadMultiplier;
     return true;
   }
 
   fire(request: FireRequest, onFire: (request: FireRequest) => void) {
     const definition = this.definition();
     if (!definition || this.state.isReloading || this.state.cooldown > 0 || this.state.magazine <= 0) return false;
-    onFire({ ...request, damage: definition.damage });
+    onFire({ ...request, damage: definition.damage * this.damageMultiplier });
     this.state.magazine -= 1;
     this.state.cooldown = definition.fireInterval;
     this.persistCurrent();

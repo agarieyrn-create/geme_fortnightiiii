@@ -21,7 +21,7 @@ export class PlayerController {
 
   constructor(readonly rig: PlayerRig, readonly camera: CameraController, readonly weapon: WeaponSystem) {}
 
-  update(delta: number, snapshot: InputSnapshot, obstacles: Obstacle[], resolveObstacles: (position: Vector3, clearance: number) => void, onFire: (origin: Vector3, direction: Vector3) => void, onEvent: (message: string) => void) {
+  update(delta: number, snapshot: InputSnapshot, obstacles: Obstacle[], resolveObstacles: (position: Vector3, clearance: number) => void, onFire: (origin: Vector3, direction: Vector3, damage: number) => void, onEvent: (message: string) => void) {
     this.aiming = snapshot.aiming;
     this.rig.setAiming?.(this.aiming);
     const grounded = this.rig.root.position.y <= 0.025 && this.rig.velocityY <= 0.2;
@@ -69,7 +69,7 @@ export class PlayerController {
     const aimDirection = this.camera.aimDirection();
     const muzzle = this.rig.root.position.add(new Vector3(0, this.crouching ? 0.94 : 1.32, 0)).add(aimDirection.scale(0.8));
     const hasWeapon = this.weapon.definition() !== null;
-    if (snapshot.firing && hasWeapon) this.weapon.fire({ origin: muzzle, direction: aimDirection, damage: 25 }, (request) => onFire(request.origin, request.direction));
+    if (snapshot.firing && hasWeapon) this.weapon.fire({ origin: muzzle, direction: aimDirection, damage: 25 }, (request) => onFire(request.origin, request.direction, request.damage));
 
     let nextMotion: MotionState;
     if (this.weapon.state.isReloading) nextMotion = "RELOAD";
