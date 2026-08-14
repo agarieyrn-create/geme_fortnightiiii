@@ -1092,8 +1092,14 @@ export class GameWorld {
 
   private showHitMarker() {
     const marker = document.getElementById("hit-marker");
-    if (!marker) return;
-    marker.classList.add("active");
-    window.setTimeout(() => marker.classList.remove("active"), 80);
+    const crosshair = document.querySelector<HTMLElement>(".crosshair");
+    if (marker) {
+      marker.classList.add("active");
+      window.setTimeout(() => marker.classList.remove("active"), 80);
+    }
+    if (crosshair) {
+      crosshair.classList.add("hit");
+      window.setTimeout(() => crosshair.classList.remove("hit"), 120);
+    }
   }
 }

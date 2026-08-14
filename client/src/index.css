@@ -115,3 +115,7 @@ button { font: inherit; }
   .touch-actions { z-index: 20; }
   .touch-actions button { position: relative; z-index: 21; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 }
+
+/* Hit feedback: the central reticle flashes red only when a projectile reaches a target. */
+.crosshair::before, .crosshair::after, .crosshair i, .crosshair b { transition: background-color .08s ease, box-shadow .08s ease; }
+.crosshair.hit::before, .crosshair.hit::after, .crosshair.hit i, .crosshair.hit b { background: #ff4d5e; box-shadow: 0 0 9px rgba(255, 77, 94, .92); }

@@ -36,3 +36,9 @@ The desktop demo screenshot shows `WALK_FORWARD` while the third-person camera i
 修正では、`isActive()`へ`aiming`、`firing`、`reloadPressed`を追加した。ボタンはPointer Eventsの`pointerdown`／`pointerup`／`pointercancel`を使い、`preventDefault()`、`stopPropagation()`、Pointer Capture、`touch-action:none`を適用した。これによりAIMは押下中だけtrue、FIREは押下中だけtrue、RELOADはワンショット入力として既存のPlayerController／WeaponSystem経路へ渡る。ボタン操作がCanvasの右スワイプ視点へ伝播しないことも確認した。
 
 AIM／FIRE／RELOADの押下時には、それぞれ`AIM INPUT OK`、`FIRE INPUT OK`、`RELOAD INPUT OK`を約1秒表示する一時デバッグ表示を追加した。PCのRMB／LMB／R入力経路は変更していない。モバイル390x844画面で、左ジョイスティック、右側6ボタン、HUD、クロスヘア、既存3Dプレイヤーを確認し、TypeScriptチェックと本番ビルドは成功した。見た目、モデル、マップ、移動、カメラ、武器仕様は変更していない。
+
+## 命中時クロスヘア色フィードバック
+
+ターゲットへの弾丸命中時に既存の`showHitMarker()`から中央`.crosshair`へ`hit`クラスを追加し、120msだけ赤色へ変化させるようにした。通常の白色クロスヘア、既存のHit Marker、命中時Impact表示は維持される。赤色状態では各照準線へ`#ff4d5e`と軽い赤い発光を適用し、通常状態へ自動復帰する。
+
+TypeScriptチェック、本番ビルド、STEP 2 PC画面を確認済み。移動、カメラ、武器、入力、マップ、UI構造は変更していない。
