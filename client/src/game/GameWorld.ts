@@ -31,6 +31,7 @@ const BASALT = new Color3(0.12, 0.055, 0.023);
 const RUST = new Color3(0.77, 0.16, 0.1);
 
 const PLAYER_MAX_HP = 300;
+const ENEMY_MAX_HP = 100;
 const PLAYER_WEAPON_RANGE = 500;
 const PLAYER_WEAPON_DAMAGE = 25;
 const ENEMY_ATTACK_RANGE = 25;
@@ -81,6 +82,9 @@ class Combatant {
   private readonly cloakMaterial: StandardMaterial;
   private readonly limbs: Mesh[] = [];
   private readonly collider: Mesh;
+  private hpLabel?: Mesh;
+  private hpTexture?: DynamicTexture;
+  private hpLabelMaterial?: StandardMaterial;
   private colliderHeight = 2.4;
   private readonly animationController = new AnimationController();
   private readonly humanoid?: HumanoidModelController;
@@ -103,6 +107,10 @@ class Combatant {
     readonly enemy = false,
   ) {
     this.root = new TransformNode(`${id}-root`, scene);
+    if (enemy) {
+      this.hp = ENEMY_MAX_HP;
+      this.shield = 0;
+    }
     this.root.position.copyFrom(position);
     this.humanoid = enemy ? undefined : new HumanoidModelController(scene, this.root, id);
     this.body = MeshBuilder.CreateCapsule(`${id}-body`, { height: 1.18, radius: 0.32, tessellation: 12 }, scene);
@@ -116,6 +124,7 @@ class Combatant {
     this.collider.parent = this.root;
     this.collider.position.y = 1.2;
     this.collider.isVisible = false;
+    this.collider.metadata = enemy ? { enemyId: id } : { collider: "player" };
     this.collider.checkCollisions = true;
     this.root.metadata = { collider: "capsule", height: this.colliderHeight, radius: 0.38 };
     this.armorMaterial = new StandardMaterial(`${id}-armor-mat`, scene);
@@ -172,6 +181,7 @@ class Combatant {
     cape.position.set(0, 1.23, 0.37);
     cape.material = this.cloakMaterial;
     this.createWeapon();
+    if (enemy) this.createEnemyHpLabel();
 
     const visor = MeshBuilder.CreateSphere(`${id}-visor`, { diameter: 0.34, segments: 10 }, scene);
     visor.parent = this.root;
@@ -187,6 +197,43 @@ class Combatant {
     void this.humanoid?.load();
   }
 
+  private createEnemyHpLabel() {
+    this.hpTexture = new DynamicTexture(`${this.id}-hp-texture`, { width: 256, height: 64 }, this.scene, false);
+    this.hpTexture.hasAlpha = true;
+    this.hpLabelMaterial = new StandardMaterial(`${this.id}-hp-label-material`, this.scene);
+    this.hpLabelMaterial.diffuseTexture = this.hpTexture;
+    this.hpLabelMaterial.emissiveTexture = this.hpTexture;
+    this.hpLabelMaterial.opacityTexture = this.hpTexture;
+    this.hpLabelMaterial.disableLighting = true;
+    this.hpLabelMaterial.backFaceCulling = false;
+    this.hpLabel = MeshBuilder.CreatePlane(`${this.id}-hp-label`, { width: 2.35, height: 0.58 }, this.scene);
+    this.hpLabel.parent = this.root;
+    this.hpLabel.position.y = 3.05;
+    this.hpLabel.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    this.hpLabel.isPickable = false;
+    this.hpLabel.material = this.hpLabelMaterial;
+    this.updateEnemyHpLabel();
+  }
+
+  private updateEnemyHpLabel() {
+    if (!this.hpTexture) return;
+    const context = this.hpTexture.getContext() as unknown as CanvasRenderingContext2D;
+    context.clearRect(0, 0, 256, 64);
+    context.fillStyle = "rgba(4, 12, 20, 0.82)";
+    context.fillRect(2, 2, 252, 60);
+    context.fillStyle = this.hp <= 0 ? "#ff5665" : "#f2f8f7";
+    context.font = "bold 20px Arial";
+    context.textAlign = "center";
+    context.fillText(this.id.toUpperCase(), 128, 23);
+    context.font = "bold 22px Arial";
+    context.fillText(`${Math.ceil(this.hp)} / ${ENEMY_MAX_HP}`, 128, 49);
+    this.hpTexture.update(false);
+  }
+
+  containsPoint(point: Vector3) {
+    return this.alive && this.collider.intersectsPoint(point);
+  }
+
   applyLoadout(loadoutId: string) {
     const loadout = CHARACTER_LOADOUTS[loadoutId];
     if (!loadout) return;
@@ -200,6 +247,7 @@ class Combatant {
   }
 
   applyDamage(amount: number) {
+    if (!this.alive) return false;
     let remaining = amount;
     if (this.shield > 0) {
       const shieldLoss = Math.min(this.shield, remaining);
@@ -207,6 +255,7 @@ class Combatant {
       remaining -= shieldLoss;
     }
     this.hp = Math.max(0, this.hp - remaining);
+    this.updateEnemyHpLabel();
     this.flash = 0.24;
     if (this.hp <= 0) {
       this.alive = false;
@@ -538,10 +587,20 @@ export class GameWorld {
   private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3) {
     const direction = cameraDirection.normalize();
     const ray = new Ray(this.camera.position, direction, PLAYER_WEAPON_RANGE);
-    const pick = this.scene.pickWithRay(ray, (mesh) => Boolean(mesh.metadata?.trainingTargetId));
+    const pick = this.scene.pickWithRay(ray, (mesh) => Boolean(mesh.metadata?.trainingTargetId || mesh.metadata?.enemyId));
     const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(direction.scale(PLAYER_WEAPON_RANGE));
-    const shotDirection = aimPoint.subtract(origin).normalize();
-    this.spawnProjectile(origin, shotDirection, "player", PLAYER_WEAPON_DAMAGE);
+    const enemyId = pick?.pickedMesh?.metadata?.enemyId as string | undefined;
+    const target = enemyId ? this.rivals.find((rival) => rival.id === enemyId && rival.alive) : undefined;
+    if (target) {
+      const eliminated = target.applyDamage(PLAYER_WEAPON_DAMAGE);
+      this.showHitMarker();
+      this.pushEvent(`-${PLAYER_WEAPON_DAMAGE} HP`);
+      this.createImpact(aimPoint, eliminated);
+      if (eliminated) {
+        this.elims += 1;
+        this.pushEvent(`${target.id.toUpperCase()} を排除`);
+      }
+    }
     this.playShotSound();
     this.cameraController.addRecoil(0.014);
     const tracer = MeshBuilder.CreateLines("bullet-tracer", { points: [origin, aimPoint] }, this.scene);
@@ -583,7 +642,9 @@ export class GameWorld {
     material.emissiveColor = owner === "player" ? TEAL : AMBER;
     material.disableLighting = true;
     mesh.material = material;
-    this.projectiles.push({ mesh, velocity: direction.normalize().scale(owner === "player" ? 52 : 38), owner, life: 1.35, damage });
+    const speed = owner === "player" ? 52 : 38;
+    const life = owner === "player" ? PLAYER_WEAPON_RANGE / speed + 0.25 : 1.35;
+    this.projectiles.push({ mesh, velocity: direction.normalize().scale(speed), owner, life, damage });
     if (owner === "player") this.createMuzzleFlash(origin, direction);
   }
 
@@ -926,8 +987,8 @@ export class GameWorld {
       const rival = new Rival(this.scene, `rival-${index + 1}`, position);
       const loadout = ["rustjaw", "veil", "anker", "rustjaw"][index];
       rival.applyLoadout(loadout);
-      rival.shield = this.options.step === "step3" ? 0 : 35 + index * 4;
-      rival.hp = 100;
+      rival.shield = 0;
+      rival.hp = ENEMY_MAX_HP;
       this.rivals.push(rival);
     });
   }
@@ -1087,7 +1148,7 @@ export class GameWorld {
       projectile.life -= delta;
       let hit = false;
       if (projectile.owner === "player") {
-        const target = this.rivals.find((rival) => rival.alive && Vector3.DistanceSquared(projectile.mesh.position, rival.root.position.add(new Vector3(0, 1, 0))) < 1.6);
+        const target = this.rivals.find((rival) => rival.containsPoint(projectile.mesh.position));
         if (target) {
           const eliminated = target.applyDamage(projectile.damage);
           this.showHitMarker();

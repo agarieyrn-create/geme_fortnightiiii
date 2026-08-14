@@ -76,3 +76,11 @@ GOD MODEはHUD右下の小さな`GOD: OFF/ON`ボタンから切替可能。ONで
 プレイヤー射撃の中央Raycastは500単位まで延長し、Tracerは命中地点または500単位のAimPointまで描画する。敵攻撃の射程25・間隔1.15秒はプレイヤー射程と独立している。敵3体はプレイヤー位置からNear／Medium／Far相当の配置を維持し、遠距離射撃テストが可能な状態にした。
 
 390x844モバイル画面で敵表示、HPバー、複数の`-10 HP`表示、GOD切替、既存Aim／Fire／Reload／移動UIを確認した。TypeScriptチェックと本番ビルドに成功。グラフィック、モデル、武器モデル、マップ、新しい敵AI、アイテム、武器追加は変更していない。
+
+## 敵ダメージ処理修正
+
+敵Combatantの初期シールドを0へ固定し、`ENEMY_MAX_HP = 100`を敵生成・頭上HPラベルへ統一した。`PLAYER_WEAPON_DAMAGE = 25`で、プレイヤーの中央Raycastは敵Collider metadataを直接取得し、対象Rivalの`applyDamage(25)`へ接続する。これによりHPは100→75→50→25→0となる。命中時はHit Marker、Impact、`-25 HP`イベントを表示する。
+
+敵Colliderには`enemyId`を付与し、死亡済みRivalは`containsPoint()`と`applyDamage()`の両方で拒否する。HP0ではDEAD、攻撃・追跡・移動停止、Collider停止、倒れた姿勢、ELIMS+1を実行し、後続射撃でELIMSが増えない。プレイヤー弾の表示用Projectile寿命もPLAYER_WEAPON_RANGE／速度から計算し、長距離の実弾到達制限を解消した。
+
+敵頭上にはDynamicTextureのビルボードHPラベルを追加し、敵名と現在HP／100を表示する。TypeScriptチェックと本番ビルドに成功し、PC STEP 3画面で敵3体、頭上HPラベル、プレイヤーHP、既存HUD、敵弾イベントを確認した。既存の移動、カメラ、AIM、FIRE、RELOAD、敵AI、マップ、モデル、UIデザインは維持した。
