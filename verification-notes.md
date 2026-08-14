@@ -92,3 +92,11 @@ TouchInputManagerの移動用IDを`movementPointerId`、カメラ用IDを`camera
 InputManagerにはkeyup状態を基準にした既存スナップショットを維持しつつ、blur／visibilitychange時のresetを追加した。GameWorldはプレイヤー死亡時にPC・モバイル両方の入力をresetする。TouchInputManagerの毎フレームスナップショットに一時`Move Input: X: 0.00 Y: 0.00`表示を追加し、入力終了後にゼロへ戻る状態を確認できるようにした。
 
 390x844モバイル画面と1280x720 PC画面で、既存の敵AI・HP・射撃・AIM／FIRE／RELOAD・移動UIが描画され、Move Inputデバッグ表示が初期0.00になることを確認した。TypeScriptチェックと本番ビルドに成功。グラフィック、モデル、武器、マップ、カメラ、敵AI、敵HP、射撃仕様、UIデザインは変更していない。
+
+## キャラクターモデル固定修正
+
+GameCanvasで選択済みavatarIdをsessionStorageへ保存し、selectedAvatarRefとしてゲームシーン生成時に一度だけ渡す。GameWorldは初期Combatant生成時にこのavatarIdのloadoutを適用し、ゲーム中はPlayerRoot／CharacterVisualを再生成しない。プレイ中の状態変更はHumanoidModelControllerのAnimationGroupと同一Skeleton上の姿勢変更だけを使用する。
+
+HumanoidModelControllerにはloadGenerationを追加し、非同期GLBロード完了時に世代が古ければ結果のMesh、Skeleton、AnimationGroupを破棄して現在のVisualを上書きしない。dispose時にも世代を進める。ロード失敗時は既存の初期Fallbackを維持し、後から別モデルへ切り替えない。RETRYは同じsessionStorageの選択avatarIdを復元する。
+
+トップ画面のキャラクター選択UIを確認し、ゲーム起動後のPC画面、TypeScriptチェック、本番ビルドを確認した。移動、カメラ、射撃、敵AI、HP、マップ、グラフィック品質、新機能は変更していない。

@@ -149,3 +149,12 @@
 - [x] InputManagerのkeyupとPlayerControllerの毎フレームゼロ入力を確認する。
 - [x] 一時Move Input表示を追加し、前後左右・複数タッチ・FIRE／AIM併用後の停止を検証する。
 - [x] 敵AI、敵HP、射撃、カメラ、武器、グラフィック、マップ、UIデザインは変更しない。
+
+## キャラクターモデル固定修正
+
+- [x] selectedCharacterの選択・開始・RETRY経路とHumanoidロード箇所を確認する。
+- [x] ゲーム開始時にCharacterVisualを一度だけ生成・ロードし、PlayerRootへ固定する。
+- [x] Idle／Walk／Run／Jump／Crouch／Aim／Fire／Reload／被弾／撃破中にモデルを再生成しない。
+- [x] 非同期ロード競合、フォールバック切替、RETRY後のキャラクター変更を防止する。
+- [x] PC・モバイルで継続シナリオとビルドを確認する。
+- [x] 移動、カメラ、射撃、敵AI、HP、マップ、グラフィック品質、新機能は変更しない。

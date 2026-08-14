@@ -30,7 +30,12 @@ export default function GameCanvas() {
     typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
   const [started, setStarted] = useState(isDemo);
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
-  const [avatar, setAvatar] = useState<AvatarId>("kairo");
+  const [avatar, setAvatar] = useState<AvatarId>(() => {
+    if (typeof window === "undefined") return "kairo";
+    const stored = window.sessionStorage.getItem("stormfall-selected-avatar") as AvatarId | null;
+    return AVATARS.some((option) => option.id === stored) ? (stored as AvatarId) : "kairo";
+  });
+  const selectedAvatarRef = useRef<AvatarId>(avatar);
   const gameState = outcome ? "gameover" : started ? "playing" : "menu";
 
   useEffect(() => {
@@ -48,6 +53,7 @@ export default function GameCanvas() {
     void createGameScene(engine, canvas, {
       demo: isDemo,
       step: "step3",
+      avatarId: selectedAvatarRef.current,
       onResult: (nextOutcome) => {
         setOutcome(nextOutcome);
         if (document.pointerLockElement === canvas) document.exitPointerLock();
@@ -58,6 +64,7 @@ export default function GameCanvas() {
         return;
       }
       handleRef.current = handle;
+      handle.setAvatar(selectedAvatarRef.current);
       if (isDemo) handle.start();
       engine.runRenderLoop(() => handle.scene.render());
     });
@@ -82,6 +89,8 @@ export default function GameCanvas() {
   };
 
   const selectAvatar = (nextAvatar: AvatarId) => {
+    window.sessionStorage.setItem("stormfall-selected-avatar", nextAvatar);
+    selectedAvatarRef.current = nextAvatar;
     setAvatar(nextAvatar);
     handleRef.current?.setAvatar(nextAvatar);
   };

@@ -48,7 +48,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "full"; onResult: (outcome: MatchOutcome) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "full"; avatarId: string; onResult: (outcome: MatchOutcome) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -524,7 +524,7 @@ export class GameWorld {
       this.pushEvent(this.debugGodMode ? "DEBUG GOD MODE ON" : "DEBUG GOD MODE OFF");
     });
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
-    this.player.applyLoadout("kairo");
+    this.player.applyLoadout(options.avatarId);
     this.player.hp = options.step === "step3" ? PLAYER_MAX_HP : 100;
     this.player.shield = options.step === "step3" ? 0 : 65;
     if (options.step === "full" || options.step === "step3") {

@@ -26,15 +26,23 @@ export class HumanoidModelController {
   private blend = 1;
   private loaded = false;
   private loadFailed = false;
+  private loadGeneration = 0;
   private readonly skeletonCount: number[] = [];
 
   constructor(private readonly scene: Scene, private readonly anchor: TransformNode, private readonly id: string) {}
 
   async load() {
     if (this.loaded || this.loadFailed) return;
+    const generation = ++this.loadGeneration;
     try {
       const legacyMeshes = this.anchor.getChildMeshes().filter((mesh) => mesh.name !== `${this.id}-capsule-collider`);
       const result = await ImportMeshAsync(HUMANOID_URL, this.scene);
+      if (generation !== this.loadGeneration) {
+        result.animationGroups.forEach((group) => group.dispose());
+        result.meshes.forEach((mesh) => mesh.dispose(false, true));
+        result.skeletons.forEach((skeleton) => skeleton.dispose());
+        return;
+      }
       this.modelRoot = new TransformNode(`${this.id}-humanoid-root`, this.scene);
       const modelRoot = this.modelRoot;
       modelRoot.parent = this.anchor;
@@ -129,6 +137,7 @@ export class HumanoidModelController {
   }
 
   dispose() {
+    this.loadGeneration += 1;
     this.groups.forEach((group) => group.dispose());
     this.modelRoot?.dispose(false, true);
   }
