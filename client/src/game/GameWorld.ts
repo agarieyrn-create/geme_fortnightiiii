@@ -1268,7 +1268,7 @@ export class GameWorld {
     if (pickup.type === "weapon" && pickup.weaponId) {
       this.weaponSystem.equip(pickup.weaponId, 90);
       this.player.setWeaponVisible(true);
-      this.announcement = `${pickup.label} を取得`;
+      this.announcement = `${pickup.label}をひろった`;
     } else if (pickup.type === "ammo" && pickup.ammoType) {
       this.weaponSystem.addReserve(pickup.amount ?? 30, pickup.ammoType);
       this.announcement = `${pickup.label} +${pickup.amount ?? 30}`;
@@ -1314,11 +1314,16 @@ export class GameWorld {
       }
     });
     this.nearbyPickup = nearest;
-    const pickupButton = document.querySelector<HTMLButtonElement>('[data-touch-action="pickup"]');
-    if (pickupButton) pickupButton.disabled = !nearest;
     const medkitButton = document.querySelector<HTMLButtonElement>('[data-touch-action="medkit"]');
     if (medkitButton) medkitButton.disabled = this.medkits <= 0 || this.medkitTimer > 0;
-    this.announcement = nearest ? `${nearest.label}をひろう` : (this.medkitTimer > 0 ? "回復中…" : "近くのアイテムを探そう");
+    if (nearest) {
+      // STEP 4 uses proximity pickup: the closest item is consumed as soon as
+      // the player enters the detection radius. pickupNearest() owns all
+      // inventory, weapon visibility, HUD, and ground-removal updates.
+      this.pickupNearest();
+      return;
+    }
+    this.announcement = this.medkitTimer > 0 ? "回復中…" : "近くのアイテムを探そう";
   }
 
   private updateCamera(delta: number) {

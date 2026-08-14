@@ -28,7 +28,7 @@ export class HudController {
     const medkitButton = document.getElementById("medkit-value");
     if (medkitButton) medkitButton.classList.toggle("is-available", medkits > 0);
     const pickupButton = document.querySelector<HTMLElement>('[data-touch-action="pickup"]');
-    if (pickupButton) pickupButton.classList.toggle("is-available", Boolean(snapshot.pickup && !snapshot.pickup.includes("近く")));
+    if (pickupButton) pickupButton.classList.remove("is-available");
     const reloadButton = document.querySelector<HTMLElement>('[data-touch-action="reload"]');
     const magazineSize = snapshot.weaponName === "ショットガン" ? 5 : 30;
     if (reloadButton) reloadButton.classList.toggle("is-available", snapshot.ammo > 0 && snapshot.reserve > 0 && snapshot.ammo < magazineSize);
