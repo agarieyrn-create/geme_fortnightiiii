@@ -3,6 +3,8 @@ export type ProgressionData = {
   clears: number;
   ruinsCleared: boolean;
   forestUnlocked: boolean;
+  forestClears: number;
+  nextDungeonDiscovered: boolean;
   hpLevel: number;
   attackLevel: number;
   reloadLevel: number;
@@ -15,6 +17,8 @@ export const DEFAULT_PROGRESSION: ProgressionData = {
   clears: 0,
   ruinsCleared: false,
   forestUnlocked: false,
+  forestClears: 0,
+  nextDungeonDiscovered: false,
   hpLevel: 1,
   attackLevel: 1,
   reloadLevel: 1,
@@ -64,9 +68,12 @@ export function getPlayerStats(data: ProgressionData) {
   };
 }
 
-export function dungeonReward(data: ProgressionData) {
-  const reward = data.clears === 0 ? 100 : 50;
-  const next = { ...data, coins: data.coins + reward, clears: data.clears + 1, ruinsCleared: true, forestUnlocked: true };
+export function dungeonReward(data: ProgressionData, dungeonId: "ruins" | "forest" = "ruins", bonusReward = 0) {
+  const baseReward = dungeonId === "forest" ? 100 : data.clears === 0 ? 100 : 50;
+  const reward = baseReward + bonusReward;
+  const next = dungeonId === "forest"
+    ? { ...data, coins: data.coins + reward, forestClears: data.forestClears + 1, nextDungeonDiscovered: true }
+    : { ...data, coins: data.coins + reward, clears: data.clears + 1, ruinsCleared: true, forestUnlocked: true };
   saveProgression(next);
-  return { data: next, reward };
+  return { data: next, reward, baseReward, bonusReward };
 }

@@ -3,6 +3,7 @@ import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
 import { GameWorld, type MatchOutcome, type WorldOptions } from "./GameWorld";
 import type { ProgressionData } from "./Progression";
+import type { DungeonId } from "./DungeonConfig";
 
 export type GameHandle = {
   scene: Scene;
@@ -11,7 +12,7 @@ export type GameHandle = {
   dispose: () => void;
 };
 
-export type GameSceneOptions = Pick<WorldOptions, "demo" | "step" | "onResult" | "progression"> & { avatarId: string };
+export type GameSceneOptions = Pick<WorldOptions, "demo" | "step" | "onResult" | "progression" | "dungeonId"> & { avatarId: string };
 export type { MatchOutcome };
 
 export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement, options: GameSceneOptions): Promise<GameHandle> {

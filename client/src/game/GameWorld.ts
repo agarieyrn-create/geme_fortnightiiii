@@ -24,6 +24,7 @@ import { HumanoidModelController } from "./HumanoidModelController";
 import { EnemyDirector } from "./EnemyDirector";
 import { WorldBuilder } from "./WorldBuilder";
 import type { ProgressionData } from "./Progression";
+import { DUNGEON_CONFIGS, type DungeonId } from "./DungeonConfig";
 
 const TEAL = new Color3(0.075, 0.85, 0.77);
 const AMBER = new Color3(1, 0.54, 0.15);
@@ -54,7 +55,8 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; avatarId: string; progression: ProgressionData; onResult: (outcome: MatchOutcome) => void };
+export type DungeonSummary = { dungeonId: DungeonId; baseReward: number; bonusReward: number };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; dungeonId: DungeonId; avatarId: string; progression: ProgressionData; onResult: (outcome: MatchOutcome, summary?: DungeonSummary) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -66,7 +68,7 @@ type Projectile = {
 
 type Pickup = {
   root: TransformNode;
-  type: "weapon" | "ammo" | "shield" | "med" | "key" | "chest";
+  type: "weapon" | "ammo" | "shield" | "med" | "key" | "chest" | "secret";
   weaponId?: import("./contracts").WeaponId;
   ammoType?: "medium" | "light" | "shells";
   label: string;
@@ -360,6 +362,7 @@ class Combatant {
 
 class Rival extends Combatant {
   aiState: import("./contracts").EnemyState = "IDLE";
+  style: "normal" | "melee" | "ranged" | "forestBoss" = "normal";
   private fireCooldown = 0.65 + Math.random() * 0.35;
   attackDamage = ENEMY_ATTACK_DAMAGE;
   private stateTimer = 1.5 + Math.random() * 1.5;
@@ -377,6 +380,23 @@ class Rival extends Combatant {
       position.add(new Vector3(-6, 0, -3)),
     ];
     this.lastSeen.copyFrom(position);
+  }
+
+  setStyle(style: "normal" | "melee" | "ranged" | "forestBoss") {
+    this.style = style;
+    if (style === "melee") {
+      this.attackDamage = 12;
+      this.applyLoadout("anker");
+      this.root.scaling.setAll(1.08);
+    } else if (style === "ranged") {
+      this.attackDamage = 8;
+      this.applyLoadout("veil");
+      this.root.scaling.setAll(0.92);
+    } else if (style === "forestBoss") {
+      this.attackDamage = 15;
+      this.applyLoadout("anker");
+      this.root.scaling.setAll(1.82);
+    }
   }
 
   override applyDamage(amount: number) {
@@ -412,9 +432,10 @@ class Rival extends Combatant {
       this.lastSeen.copyFrom(player.root.position);
       this.lostTimer = 0;
       if (this.aiState === "IDLE" || this.aiState === "PATROL") this.aiState = "ALERT";
-      if (this.aiState === "ALERT" && this.stateTimer <= 0) this.aiState = distance <= 24 ? "ATTACK" : "CHASE";
-      if (this.aiState === "CHASE" && distance <= 24) this.aiState = "ATTACK";
-      if (this.aiState === "ATTACK" && distance > 27) this.aiState = "CHASE";
+      const attackRange = this.style === "melee" ? 4.2 : this.style === "ranged" ? 20 : 24;
+      if (this.aiState === "ALERT" && this.stateTimer <= 0) this.aiState = distance <= attackRange ? "ATTACK" : "CHASE";
+      if (this.aiState === "CHASE" && distance <= attackRange) this.aiState = "ATTACK";
+      if (this.aiState === "ATTACK" && distance > attackRange + 3) this.aiState = "CHASE";
     } else {
       this.lostTimer += delta;
       if ((this.aiState === "CHASE" || this.aiState === "ATTACK" || this.aiState === "ALERT") && (this.lostTimer > 7 || distance > 68)) {
@@ -425,14 +446,22 @@ class Rival extends Combatant {
     }
 
     if (this.aiState === "PATROL") this.patrol(delta, world);
-    if (this.aiState === "CHASE") this.moveToward(this.lastSeen, 4.5, delta, world);
+    if (this.aiState === "CHASE") this.moveToward(this.lastSeen, this.style === "melee" ? 6.1 : this.style === "ranged" ? 3.6 : 4.5, delta, world);
     if (this.aiState === "ALERT") this.faceToward(this.lastSeen);
     if (this.aiState === "ATTACK") {
       this.faceToward(player.root.position);
-      if (visible && distance <= ENEMY_ATTACK_RANGE && this.fireCooldown <= 0) {
+      const attackRange = this.style === "melee" ? 4.2 : this.style === "ranged" ? 22 : ENEMY_ATTACK_RANGE;
+      if (visible && distance <= attackRange && this.fireCooldown <= 0) {
         const direction = playerAim.subtract(eye).normalize();
-        world.spawnProjectile(eye.add(direction.scale(0.8)), direction, "rival", this.attackDamage);
-        this.fireCooldown = ENEMY_ATTACK_INTERVAL;
+        if (this.style === "melee") {
+          world.pushEvent("敵がとびこんでくる！");
+          world.spawnProjectile(eye.add(direction.scale(0.45)), direction, "rival", this.attackDamage);
+          this.fireCooldown = 1.45;
+        } else {
+          if (this.style === "ranged") world.pushEvent("遠くの敵がねらっている！");
+          world.spawnProjectile(eye.add(direction.scale(0.8)), direction, "rival", this.attackDamage);
+          this.fireCooldown = this.style === "ranged" ? 1.5 : ENEMY_ATTACK_INTERVAL;
+        }
       }
     }
     this.setMotionState(this.aiState === "PATROL" || this.aiState === "CHASE" ? "WALK_FORWARD" : this.aiState);
@@ -530,6 +559,15 @@ export class GameWorld {
   private bossWarningTimer = 0;
   private bossWarning?: Mesh;
   private bossWarningPosition = new Vector3();
+  private forestRoute: "left" | "right" | null = null;
+  private forestSecretFound = false;
+  private forestBossDashCooldown = 5.5;
+  private forestBossDashWarning = 0;
+  private forestBossDashDirection = new Vector3();
+
+  private get isForestDungeon() {
+    return this.options.step === "step5" && this.options.dungeonId === "forest";
+  }
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
@@ -537,16 +575,22 @@ export class GameWorld {
     scene.fogMode = Scene.FOGMODE_EXP2;
     scene.fogColor = new Color3(0.035, 0.07, 0.12);
     scene.fogDensity = canvas.clientWidth < 600 ? 0.0042 : 0.0085;
+    if (this.isForestDungeon) {
+      scene.clearColor = new Color4(0.025, 0.11, 0.075, 1);
+      scene.ambientColor = new Color3(0.12, 0.22, 0.15);
+      scene.fogColor = new Color3(0.055, 0.16, 0.11);
+      scene.fogDensity = canvas.clientWidth < 600 ? 0.006 : 0.011;
+    }
     new HemisphericLight("sky-hemisphere", new Vector3(0.15, 1, 0.1), scene).intensity = 0.88;
     const sun = new DirectionalLight("low-sun", new Vector3(-0.36, -0.72, 0.38), scene);
     sun.position = new Vector3(42, 72, -35);
     sun.intensity = 1.05;
 
     this.terrainMaterial = new StandardMaterial("sandstone-terrain", scene);
-    this.terrainMaterial.diffuseColor = SAND;
+    this.terrainMaterial.diffuseColor = this.isForestDungeon ? new Color3(0.09, 0.26, 0.13) : SAND;
     this.terrainMaterial.specularColor = new Color3(0.04, 0.035, 0.025);
     this.terrainMaterial.diffuseTexture = this.createTerrainTexture();
-    this.terrainMaterial.emissiveColor = new Color3(0.006, 0.001, 0);
+    this.terrainMaterial.emissiveColor = this.isForestDungeon ? new Color3(0.005, 0.024, 0.01) : new Color3(0.006, 0.001, 0);
     this.buildEnvironment();
 
     this.input = new InputManager(canvas);
@@ -566,7 +610,8 @@ export class GameWorld {
     this.player.hp = options.step === "step3" || options.step === "step4" || options.step === "step5" ? this.playerMaxHp() : 100;
     this.player.shield = options.step === "step3" || options.step === "step4" || options.step === "step5" ? 0 : 65;
     if (options.step === "step5") {
-      this.createDungeonAreaOne();
+      if (this.isForestDungeon) this.createForestAreaOne();
+      else this.createDungeonAreaOne();
     } else if (options.step === "full" || options.step === "step3" || options.step === "step4") {
       this.createRivals();
       if (options.step === "full" || options.step === "step4") {
@@ -602,9 +647,9 @@ export class GameWorld {
     if (this.mode !== "briefing") return;
     this.mode = "playing";
     this.dungeonStartedAt = performance.now();
-    this.announcement = this.options.step === "step5" ? "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！" : "裂け目への降下を確認";
-    this.dungeonObjective = this.options.step === "step5" ? "敵を3体たおそう！" : this.dungeonObjective;
-    this.pushEvent(this.options.step === "step5" ? "はじまりの遺跡へようこそ！" : "エリア RIFT-07 に着地");
+    this.announcement = this.options.step === "step5" ? (this.isForestDungeon ? "まよいの森　森のおくへ進もう！" : "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！") : "裂け目への降下を確認";
+    this.dungeonObjective = this.options.step === "step5" ? (this.isForestDungeon ? "森のおくへ進もう！" : "敵を3体たおそう！") : this.dungeonObjective;
+    this.pushEvent(this.options.step === "step5" ? (this.isForestDungeon ? "まよいの森へようこそ！" : "はじまりの遺跡へようこそ！") : "エリア RIFT-07 に着地");
     if (this.options.step === "step5") this.playDungeonCue("spawn");
   }
 
@@ -712,6 +757,7 @@ export class GameWorld {
 
   private updateBossAttack(delta: number) {
     if (this.options.step !== "step5" || this.dungeonArea !== 5 || !this.boss?.alive) return;
+    if (this.isForestDungeon) this.updateForestBossDash(delta);
     if (this.bossWarningTimer > 0) {
       this.bossWarningTimer = Math.max(0, this.bossWarningTimer - delta);
       if (this.bossWarning) {
@@ -748,6 +794,40 @@ export class GameWorld {
       this.bossWarningTimer = 1.25;
       this.announcement = "気をつけて！ 赤い場所からにげよう！";
       this.pushEvent("ボスの範囲攻撃！");
+      this.playDungeonCue("warning");
+    }
+  }
+
+  private updateForestBossDash(delta: number) {
+    if (!this.boss?.alive) return;
+    if (this.forestBossDashWarning > 0) {
+      this.forestBossDashWarning = Math.max(0, this.forestBossDashWarning - delta);
+      if (this.forestBossDashWarning === 0) {
+        this.boss.root.position.addInPlace(this.forestBossDashDirection.scale(7.2));
+        const hit = Vector3.DistanceSquared(this.player.root.position, this.boss.root.position) < 10;
+        if (hit && this.player.alive) {
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(16);
+          this.showPlayerDamage(this.boss.root.position);
+          this.pushEvent(this.debugGodMode ? "突進をよけた！" : "突進 -16 HP");
+          if (eliminated) this.pushEvent("PLAYER DEAD");
+        } else {
+          this.pushEvent("突進をよけた！");
+        }
+        this.playDungeonCue("impact");
+        this.forestBossDashCooldown = 5.5;
+      }
+      return;
+    }
+    this.forestBossDashCooldown -= delta;
+    if (this.forestBossDashCooldown <= 0) {
+      this.forestBossDashDirection = this.player.root.position.subtract(this.boss.root.position);
+      this.forestBossDashDirection.y = 0;
+      if (this.forestBossDashDirection.lengthSquared() < 0.01) this.forestBossDashDirection.z = 1;
+      this.forestBossDashDirection.normalize();
+      this.boss.root.rotation.y = Math.atan2(this.forestBossDashDirection.x, this.forestBossDashDirection.z);
+      this.forestBossDashWarning = 0.9;
+      this.announcement = "くるぞ！ 横へにげよう！";
+      this.pushEvent("ガーディアンが突進のじゅんび！");
       this.playDungeonCue("warning");
     }
   }
@@ -849,6 +929,10 @@ export class GameWorld {
   }
 
   private buildEnvironment() {
+    if (this.isForestDungeon) {
+      this.buildForestEnvironment();
+      return;
+    }
     const ground = MeshBuilder.CreateGround("rift-island", { width: 220, height: 220, subdivisions: 40 }, this.scene);
     ground.material = this.terrainMaterial;
     this.createTerrainScars();
@@ -881,6 +965,80 @@ export class GameWorld {
     this.createHills();
     this.createTrees();
     this.createBuildings();
+  }
+
+  private buildForestEnvironment() {
+    const ground = MeshBuilder.CreateGround("forest-ground", { width: 64, height: 150, subdivisions: 24 }, this.scene);
+    ground.material = this.terrainMaterial;
+    const pathMat = new StandardMaterial("forest-path-mat", this.scene);
+    pathMat.diffuseColor = new Color3(0.18, 0.24, 0.09);
+    pathMat.emissiveColor = new Color3(0.006, 0.012, 0.002);
+    [[0, 18, 11, 42, 0], [-3, -13, 11, 24, 0.26], [4, -13, 11, 24, -0.26], [0, -48, 12, 52, 0]].forEach(([x, z, width, depth, rotation], index) => {
+      const path = MeshBuilder.CreateGround(`forest-path-${index}`, { width, height: depth, subdivisions: 2 }, this.scene);
+      path.position.set(x, 0.028, z);
+      path.rotation.y = rotation;
+      path.material = pathMat;
+    });
+    const trunkMat = new StandardMaterial("forest-trunk", this.scene);
+    trunkMat.diffuseColor = new Color3(0.115, 0.055, 0.02);
+    const leafMat = new StandardMaterial("forest-leaf", this.scene);
+    leafMat.diffuseColor = new Color3(0.055, 0.28, 0.09);
+    leafMat.emissiveColor = new Color3(0.006, 0.035, 0.012);
+    const mossMat = new StandardMaterial("forest-moss", this.scene);
+    mossMat.diffuseColor = new Color3(0.12, 0.42, 0.14);
+    const placements = [[-11, 28], [11, 25], [-10, 13], [10, 7], [-12, -4], [12, -6], [-11, -20], [12, -22], [-10, -38], [11, -43], [-12, -64], [12, -70], [-10, -88], [10, -92]];
+    placements.forEach(([x, z], index) => {
+      const trunk = MeshBuilder.CreateCylinder(`forest-tree-trunk-${index}`, { height: 5.2 + (index % 3), diameterTop: 0.36, diameterBottom: 0.72, tessellation: 8 }, this.scene);
+      trunk.position.set(x, 2.8, z);
+      trunk.rotation.z = (index % 2 ? 0.08 : -0.06);
+      trunk.material = trunkMat;
+      const canopy = MeshBuilder.CreateIcoSphere(`forest-tree-canopy-${index}`, { radius: 2.4 + (index % 2) * 0.5, subdivisions: 1 }, this.scene);
+      canopy.position.set(x + (index % 2 ? 0.28 : -0.2), 6.4 + (index % 3) * 0.2, z);
+      canopy.scaling.y = 1.38;
+      canopy.material = leafMat;
+      this.obstacles.push({ position: new Vector3(x, 0, z), radius: 1.15 });
+    });
+    [[-6, 1], [7, -16], [-7, -31], [7, -35], [-6, -57], [7, -77]].forEach(([x, z], index) => {
+      const rock = MeshBuilder.CreateIcoSphere(`forest-moss-rock-${index}`, { radius: 1.1 + (index % 2) * 0.45, subdivisions: 1 }, this.scene);
+      rock.position.set(x, 0.74, z);
+      rock.scaling.set(1.25, 0.72, 0.92);
+      rock.material = mossMat;
+      this.obstacles.push({ position: new Vector3(x, 0, z), radius: 1.1 });
+    });
+    const pylonMat = new StandardMaterial("forest-pylon-mat", this.scene);
+    pylonMat.diffuseColor = new Color3(0.055, 0.085, 0.085);
+    pylonMat.emissiveColor = TEAL.scale(0.1);
+    const beaconMat = new StandardMaterial("forest-beacon-mat", this.scene);
+    beaconMat.emissiveColor = AMBER;
+    beaconMat.disableLighting = true;
+    [[-5.8, 25], [5.6, -52]].forEach(([x, z], index) => {
+      const pylon = MeshBuilder.CreateCylinder(`forest-nav-pylon-${index}`, { height: 5.8, diameterTop: 0.26, diameterBottom: 0.55, tessellation: 6 }, this.scene);
+      pylon.position.set(x, 2.9, z);
+      pylon.material = pylonMat;
+      const signal = MeshBuilder.CreateSphere(`forest-nav-signal-${index}`, { diameter: 0.62, segments: 10 }, this.scene);
+      signal.position.set(x, 5.9, z);
+      signal.material = beaconMat;
+      this.obstacles.push({ position: new Vector3(x, 0, z), radius: 0.85 });
+    });
+    [[4.6, 17], [-4.4, -47]].forEach(([x, z], index) => {
+      const beacon = MeshBuilder.CreateCylinder(`forest-supply-beacon-${index}`, { height: 1.45, diameter: 0.38, tessellation: 10 }, this.scene);
+      beacon.position.set(x, 0.72, z);
+      beacon.material = beaconMat;
+      const ring = MeshBuilder.CreateTorus(`forest-storm-marker-${index}`, { diameter: 1.6, thickness: 0.04, tessellation: 24 }, this.scene);
+      ring.position.set(x, 0.06, z);
+      ring.rotation.x = Math.PI / 2;
+      const ringMat = new StandardMaterial(`forest-storm-marker-mat-${index}`, this.scene);
+      ringMat.emissiveColor = TEAL;
+      ringMat.disableLighting = true;
+      ring.material = ringMat;
+    });
+  }
+
+  private createForestAreaOne() {
+    this.createDungeonDoor(6);
+    this.createDungeonDoor(-38);
+    this.createDungeonDoor(-70);
+    this.dungeonObjective = "森のおくへ進もう！";
   }
 
   private createRoads() {
@@ -1164,11 +1322,12 @@ export class GameWorld {
     });
   }
 
-  private spawnDungeonWave(positions: Vector3[], prefix: string) {
+  private spawnDungeonWave(positions: Vector3[], prefix: string, styles: Rival["style"][] = []) {
     this.dungeonWave = [];
     positions.forEach((position, index) => {
       const rival = new Rival(this.scene, `${prefix}-${index + 1}`, position);
       rival.applyLoadout(index % 2 === 0 ? "rustjaw" : "veil");
+      if (styles[index]) rival.setStyle(styles[index]);
       rival.shield = 0;
       rival.hp = ENEMY_MAX_HP;
       rival.maxHp = ENEMY_MAX_HP;
@@ -1181,7 +1340,7 @@ export class GameWorld {
     const root = new TransformNode(`dungeon-pickup-${type}-${this.pickups.length}`, this.scene);
     root.position.copyFrom(position);
     const material = new StandardMaterial(`dungeon-pickup-material-${this.pickups.length}`, this.scene);
-    material.diffuseColor = type === "key" ? AMBER : type === "chest" ? new Color3(0.8, 0.45, 0.12) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
+    material.diffuseColor = type === "key" ? AMBER : type === "chest" ? new Color3(0.8, 0.45, 0.12) : type === "secret" ? new Color3(0.2, 0.82, 0.36) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
     material.emissiveColor = material.diffuseColor.scale(0.35);
     const base = MeshBuilder.CreateBox(`dungeon-pickup-base-${this.pickups.length}`, { width: type === "chest" ? 1.6 : 0.72, height: type === "chest" ? 0.9 : 0.5, depth: type === "chest" ? 1.0 : 0.62 }, this.scene);
     base.parent = root;
@@ -1197,6 +1356,10 @@ export class GameWorld {
 
   private updateDungeonProgress(delta: number) {
     if (this.options.step !== "step5") return;
+    if (this.isForestDungeon) {
+      this.updateForestProgress(delta);
+      return;
+    }
     if (this.dungeonTransition > 0) {
       this.dungeonTransition = Math.max(0, this.dungeonTransition - delta);
       return;
@@ -1259,6 +1422,83 @@ export class GameWorld {
     }
   }
 
+  private updateForestProgress(delta: number) {
+    if (this.dungeonTransition > 0) {
+      this.dungeonTransition = Math.max(0, this.dungeonTransition - delta);
+      return;
+    }
+    const z = this.player.root.position.z;
+    const waveCleared = this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive);
+    if (this.dungeonArea === 1 && !this.dungeonWaveActive && z < 28) {
+      this.dungeonWaveActive = true;
+      this.dungeonObjective = "敵を3体たおそう！";
+      this.announcement = "森の敵があらわれた！";
+      this.spawnDungeonWave([new Vector3(-4, 0, 22), new Vector3(4, 0, 18), new Vector3(0, 0, 12)], "forest-entry", ["melee", "ranged", "melee"]);
+      this.pushEvent("近づく敵と遠くの敵に気をつけよう！");
+      this.playDungeonCue("spawn");
+    } else if (this.dungeonArea === 1 && this.dungeonWaveActive && waveCleared) {
+      this.dungeonArea = 2;
+      this.dungeonWaveActive = false;
+      this.dungeonObjective = "どっちに行く？";
+      this.announcement = "クリア！ どっちに行く？";
+      this.openDungeonDoor(6);
+      this.pushEvent("左は回復、右は宝箱の道だよ");
+      this.playDungeonCue("clear");
+    } else if (this.dungeonArea === 2 && !this.forestRoute && z < 1) {
+      this.forestRoute = this.player.root.position.x < 0 ? "left" : "right";
+      this.dungeonWaveActive = true;
+      this.dungeonObjective = "敵をたおして合流しよう！";
+      if (this.forestRoute === "left") {
+        this.createDungeonPickup(new Vector3(-5, 0.75, -15), "med", "回復キット", 1);
+        this.spawnDungeonWave([new Vector3(-5, 0, -10), new Vector3(-4, 0, -20)], "forest-left", ["melee", "ranged"]);
+        this.announcement = "左の道　回復を見つけよう！";
+      } else {
+        this.createDungeonPickup(new Vector3(6, 0.75, -20), "secret", "隠し宝箱", 50);
+        this.spawnDungeonWave([new Vector3(5, 0, -9), new Vector3(6, 0, -16), new Vector3(4, 0, -24)], "forest-right", ["ranged", "melee", "ranged"]);
+        this.announcement = "右の道　宝箱を探そう！";
+      }
+      this.pushEvent(this.announcement);
+      this.playDungeonCue("spawn");
+    } else if (this.dungeonArea === 2 && this.dungeonWaveActive && waveCleared) {
+      this.dungeonArea = 3;
+      this.dungeonObjective = "合流地点へ進もう！";
+      this.announcement = "クリア！ 合流地点へ進もう！";
+      this.dungeonTransition = 0.9;
+      this.playDungeonCue("clear");
+    } else if (this.dungeonArea === 3 && z < -28) {
+      this.dungeonArea = 4;
+      this.dungeonObjective = "ボス前でじゅんびしよう！";
+      this.openDungeonDoor(-38);
+      this.createDungeonPickup(new Vector3(-3, 0.75, -48), "ammo", "弾薬", 80, "medium");
+      this.createDungeonPickup(new Vector3(3, 0.75, -48), "med", "回復キット", 1);
+      this.announcement = "ボス前の補給だよ！";
+      this.playDungeonCue("door");
+    } else if (this.dungeonArea === 4 && z < -61) {
+      this.openDungeonDoor(-70);
+      if (z >= -70) return;
+      const boss = new Rival(this.scene, "forest-guardian", new Vector3(0, 0, -82));
+      boss.setStyle("forestBoss");
+      boss.shield = 0;
+      boss.hp = 460;
+      boss.maxHp = 460;
+      this.rivals.push(boss);
+      this.boss = boss;
+      this.dungeonWave = [boss];
+      this.dungeonArea = 5;
+      this.dungeonObjective = "森のガーディアンをたおそう！";
+      this.announcement = "森のガーディアンがあらわれた！";
+      this.pushEvent("ボスがあらわれた！");
+      this.playDungeonCue("boss");
+    } else if (this.dungeonArea === 5 && this.boss && !this.boss.alive && !this.dungeonChest) {
+      this.dungeonArea = 6;
+      this.dungeonChest = true;
+      this.dungeonObjective = "宝箱をあけよう！";
+      this.announcement = "森をまもってくれてありがとう！";
+      this.createDungeonPickup(new Vector3(0, 0.75, -82), "chest", "森の宝箱");
+      this.playDungeonCue("clear");
+    }
+  }
+
   private openDungeonDoor(z: number) {
     const door = this.dungeonDoors.get(z);
     if (!door || door.opening || door.progress >= 1) return;
@@ -1269,6 +1509,7 @@ export class GameWorld {
 
   private updateDungeonRoomTrigger() {
     if (this.options.step !== "step5") return;
+    if (this.isForestDungeon) return;
     const z = this.player.root.position.z;
     if (this.dungeonArea === 2 && z < 2) {
       this.dungeonObjective = this.dungeonKey ? "次の部屋へ進もう！" : "カギを見つけよう！";
@@ -1542,10 +1783,14 @@ export class GameWorld {
       this.dungeonObjective = "カギを手に入れた！ 次の部屋へ進もう！";
       this.announcement = "カギを手に入れた！";
     } else if (pickup.type === "chest") {
-      this.announcement = "コイン ×100　回復　弾薬";
+      this.announcement = this.isForestDungeon ? "森の報酬を手に入れた！" : "コイン ×100　回復　弾薬";
       this.playDungeonCue("chest");
       this.pushEvent(this.announcement);
       this.finish("victory");
+    } else if (pickup.type === "secret") {
+      this.forestSecretFound = true;
+      this.announcement = "宝箱を見つけた！ コイン +50";
+      this.playDungeonCue("chest");
     } else if (pickup.type === "weapon" && pickup.weaponId) {
       this.weaponSystem.equip(pickup.weaponId, 90);
       this.player.setWeaponVisible(true);
@@ -1667,7 +1912,10 @@ export class GameWorld {
       if (elimsElement) elimsElement.textContent = String(this.elims);
     }
           if (outcome === "victory" && this.options.step === "step5") this.playDungeonCue("victory");
-      this.options.onResult(outcome);
+      const summary = outcome === "victory" && this.options.step === "step5"
+        ? { dungeonId: this.options.dungeonId, baseReward: DUNGEON_CONFIGS[this.options.dungeonId].clearReward, bonusReward: this.isForestDungeon && this.forestSecretFound ? 50 : 0 }
+        : undefined;
+      this.options.onResult(outcome, summary);
 
   }
 
@@ -1681,11 +1929,13 @@ export class GameWorld {
       this.yaw = Math.PI;
     }
     this.cameraController.setYaw(this.yaw);
-    return { forward: 0, right: 0, jump: false, sprint: false, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, pickupPressed: false, slotPressed: null, medkitPressed: false, lookX: 0, lookY: 0 };
+    const forestAdvance = this.isForestDungeon && !rival && this.dungeonArea < 6;
+    const forestLeftFork = forestAdvance && this.dungeonArea === 2 && !this.forestRoute;
+    return { forward: forestAdvance ? 1 : 0, right: forestLeftFork ? 0.55 : 0, jump: false, sprint: forestAdvance, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, pickupPressed: false, slotPressed: null, medkitPressed: false, lookX: 0, lookY: 0 };
   }
 
   private updateHud(_force = false) {
-    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `遺跡 エリア${Math.min(4, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `${this.isForestDungeon ? "森" : "遺跡"} エリア${Math.min(5, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
       maxHp: this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5" ? this.playerMaxHp() : 100,
@@ -1700,6 +1950,7 @@ export class GameWorld {
       crouching: this.playerController.crouching,
       pickup: this.announcement,
       objective: this.options.step === "step5" ? this.dungeonObjective : undefined,
+      bossName: this.isForestDungeon ? "森のガーディアン" : "ボス",
       bossHp: this.options.step === "step5" && this.boss?.alive ? this.boss.hp : undefined,
       bossMaxHp: this.options.step === "step5" && this.boss?.alive ? this.boss.maxHp : undefined,
       weaponName: this.weaponSystem.definition()?.name ?? "武器なし",
@@ -1708,7 +1959,7 @@ export class GameWorld {
     }, this.player.root.position, this.stormRadius);
   }
 
-  private pushEvent(message: string) {
+  pushEvent(message: string) {
     const feed = document.getElementById("event-feed");
     if (!feed) return;
     const entry = document.createElement("li");

@@ -253,14 +253,14 @@ button { font: inherit; }
 }
 
 /* STEP 6 hub loop: child-friendly, edge-aligned Japanese menus with clear progression feedback. */
-.hub-screen { align-items: stretch; justify-content: space-between; gap: 24px; padding: clamp(24px, 6vw, 76px); }
-.hub-card { width: min(520px, 92vw); padding: clamp(22px, 4vw, 44px); border: 1px solid rgba(19,217,196,.35); background: rgba(3,12,24,.8); backdrop-filter: blur(10px); }
-.hub-card h1 { margin: 12px 0; color: #f4fbfb; font-size: clamp(28px, 4vw, 52px); }
+.hub-screen { align-items: center; justify-content: space-between; gap: 24px; padding: clamp(24px, 6vw, 76px); }
+.hub-card { width: min(440px, 88vw); min-height: 470px; padding: clamp(22px, 4vw, 44px); border: 1px solid rgba(19,217,196,.35); background: linear-gradient(90deg, rgba(3,12,24,.93), rgba(3,12,24,.72)); backdrop-filter: blur(8px); box-shadow: -18px 0 44px rgba(0,0,0,.32); }
+.hub-card h1 { margin: 12px 0 18px; color: #f4fbfb; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: clamp(25px, 3.35vw, 43px); font-weight: 900; letter-spacing: .08em; line-height: 1.18; }
 .coin-readout { display: inline-flex; gap: 10px; margin: 4px 0 14px; color: #9eb9bd; font-weight: 700; }
 .coin-readout strong { color: #ffd36a; }
 .hub-notice { margin: 8px 0; color: #ffe27a; font-weight: 700; }
 .hub-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
-.hub-menu button, .dungeon-card, .hub-back, .upgrade-card button { min-height: 48px; border: 1px solid rgba(19,217,196,.5); background: rgba(12,42,54,.84); color: #f6ffff; font: 700 15px "Noto Sans JP", sans-serif; cursor: pointer; }
+.hub-menu button, .dungeon-card, .hub-back, .upgrade-card button { min-height: 48px; border: 1px solid rgba(19,217,196,.5); background: rgba(12,42,54,.84); color: #f6ffff; font: 800 14px ui-monospace, "SFMono-Regular", Consolas, monospace; letter-spacing: .08em; cursor: pointer; }
 .hub-menu button:hover, .dungeon-card:hover, .hub-back:hover { background: #12cdbb; color: #03131b; }
 .hub-panel { display: grid; gap: 12px; margin-top: 16px; }
 .dungeon-card { display: grid; gap: 5px; padding: 15px; text-align: left; }
@@ -282,8 +282,8 @@ button { font: inherit; }
 .settings-panel label { display: grid; gap: 6px; padding: 10px; color: #d8e8e8; background: rgba(6,25,38,.8); }
 .settings-panel input { accent-color: #13d9c4; }
 @media (max-width: 767px), (pointer: coarse) {
-  .hub-screen { padding: 20px 14px; overflow-y: auto; }
-  .hub-card { width: 100%; padding: 20px; }
+  .hub-screen { align-items: flex-start; padding: 20px 14px; overflow-y: auto; }
+  .hub-card { width: 100%; min-height: 0; padding: 20px; }
   .hub-card h1 { font-size: 30px; }
   .avatar-chooser { width: 100%; max-width: 480px; }
   .hub-menu button { min-height: 52px; }
@@ -298,6 +298,12 @@ button { font: inherit; }
 .locked-dungeons span { display: grid; gap: 5px; }
 .locked-dungeons small { color: #93aaad; font-size: 10px; line-height: 1.35; }
 .locked-dungeons .unlocked-dungeon { border-style: solid; border-color: rgba(19,217,196,.55); color: #cffff7; }
+.forest-dungeon { min-height: 112px; padding: 12px; border: 1px dashed rgba(255,255,255,.25); background: rgba(6,25,38,.8); background-size: cover; background-position: center; color: #d8fbec; text-align: left; cursor: pointer; }
+.forest-dungeon strong, .forest-dungeon small, .forest-dungeon b { display: block; }
+.forest-dungeon small { margin-top: 6px; color: #b9dfc2; }
+.forest-dungeon b { margin-top: 8px; color: #7ff5b4; font-size: 12px; }
+.forest-dungeon:disabled { opacity: .58; cursor: not-allowed; }
+.forest-boss-panel { background-size: cover; background-position: 88% 30%; }
 .upgrade-card small:last-child { color: #ffe28a; font-weight: 800; }
 .result-stats { gap: 12px; }
 .result-stats span:last-child b { color: #ffd36a; }

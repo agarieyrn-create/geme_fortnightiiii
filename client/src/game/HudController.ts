@@ -43,7 +43,7 @@ export class HudController {
     const bossPanel = document.getElementById("boss-panel");
     if (bossPanel) bossPanel.classList.toggle("is-visible", typeof snapshot.bossHp === "number" && typeof snapshot.bossMaxHp === "number" && snapshot.bossMaxHp > 0);
     if (typeof snapshot.bossHp === "number" && typeof snapshot.bossMaxHp === "number") {
-      setText("boss-name", "ボス");
+      setText("boss-name", snapshot.bossName ?? "ボス");
       setText("boss-hp-value", `${Math.ceil(snapshot.bossHp)} / ${snapshot.bossMaxHp}`);
       setWidth("boss-hp-fill", (snapshot.bossHp / Math.max(1, snapshot.bossMaxHp)) * 100);
     }
