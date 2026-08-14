@@ -28,3 +28,11 @@ The desktop demo screenshot shows `WALK_FORWARD` while the third-person camera i
 - RobotExpressive GLBは20 Mesh・2 Skeletonとしてロードされることを確認した。PBRシェーダー経路の描画失敗に備え、実Mesh／Skeletonを維持したままStandardMaterialフォールバックを適用した。
 - PC（1280x720）とモバイル（390x844）のデモ画面で、STEP 2 HUD、クロスヘア、5体ターゲット、実3D Humanoid、タッチボタン、左ジョイスティックを確認した。TypeScriptチェックと本番ビルドは成功。
 - 既存のマップ、三人称カメラ、WASD、モバイル移動、ジャンプ、しゃがみ、ダッシュは維持した。敵AI、複数武器、アイテム、建築、ストーム、オンライン対戦はSTEP 2では追加していない。
+
+## モバイル射撃入力バグ修正
+
+今回の原因は、TouchInputManagerの`isActive()`が移動・視点・Jump／Crouch／Runだけを判定し、AIM・FIRE・RELOADの状態を無視していたことだった。GameWorldは`touchInput.isActive()`がfalseの場合にPC入力へフォールバックしていたため、停止中に戦闘ボタンだけを押すと、ボタンイベント自体が状態を変更していてもゲーム更新へ届かなかった。
+
+修正では、`isActive()`へ`aiming`、`firing`、`reloadPressed`を追加した。ボタンはPointer Eventsの`pointerdown`／`pointerup`／`pointercancel`を使い、`preventDefault()`、`stopPropagation()`、Pointer Capture、`touch-action:none`を適用した。これによりAIMは押下中だけtrue、FIREは押下中だけtrue、RELOADはワンショット入力として既存のPlayerController／WeaponSystem経路へ渡る。ボタン操作がCanvasの右スワイプ視点へ伝播しないことも確認した。
+
+AIM／FIRE／RELOADの押下時には、それぞれ`AIM INPUT OK`、`FIRE INPUT OK`、`RELOAD INPUT OK`を約1秒表示する一時デバッグ表示を追加した。PCのRMB／LMB／R入力経路は変更していない。モバイル390x844画面で、左ジョイスティック、右側6ボタン、HUD、クロスヘア、既存3Dプレイヤーを確認し、TypeScriptチェックと本番ビルドは成功した。見た目、モデル、マップ、移動、カメラ、武器仕様は変更していない。

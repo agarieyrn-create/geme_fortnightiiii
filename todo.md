@@ -82,3 +82,12 @@
 - [x] HP 100の3D練習ターゲットを5体配置し、4発命中で破壊できるようにする。敵AIは追加しない。
 - [x] PC・モバイルでAim・Fire・Reload・移動併用を検証し、16項目完了後に保存する。
 - [x] 今回は敵AI、敵攻撃、複数武器、武器切替、アイテム、宝箱、インベントリ、建築、ストーム、オンライン対戦を追加しない。
+
+## モバイル射撃入力バグ修正
+
+- [x] AIM／FIRE／RELOADボタンの実イベント、InputSnapshot、GameWorld処理経路を確認する。
+- [x] Pointer Events、preventDefault、stopPropagation、touch-action、z-indexを確認する。
+- [x] AIM長押し、FIRE長押し連射、RELOADを既存ロジックへ接続する。
+- [x] AIM INPUT OK／FIRE INPUT OK／RELOAD INPUT OKの一時表示を追加する。
+- [x] モバイル・PC操作、カメラ競合、ジョイスティック、JUMP／CROUCH／RUNを検証する。
+- [x] 見た目、モデル、マップ、移動、カメラ、武器仕様を変更せず保存する。

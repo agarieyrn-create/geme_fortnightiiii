@@ -154,6 +154,7 @@ export default function GameCanvas() {
           <div><span>FIELD SIGNAL</span><strong id="pickup-status">補給物資を探索</strong></div>
         </section>
 
+        <div id="input-debug" className="input-debug" role="status" aria-live="polite" />
         <div className="crosshair" aria-hidden="true"><i /><b /></div>
         <div className="state-chip"><span>MOVE STATE</span><strong id="motion-state">IDLE</strong><i id="crouch-state">STAND</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>

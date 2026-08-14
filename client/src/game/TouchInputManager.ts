@@ -26,6 +26,7 @@ export class TouchInputManager {
     document.querySelectorAll<HTMLElement>("[data-touch-action]").forEach((button) => {
       this.listen(button, "pointerdown", (event) => {
         event.preventDefault();
+        event.stopPropagation();
         const action = button.dataset.touchAction;
         if (action === "jump") this.jump = true;
         if (action === "crouch") this.crouch = true;
@@ -33,9 +34,19 @@ export class TouchInputManager {
         if (action === "aim") this.aiming = true;
         if (action === "fire") this.firing = true;
         if (action === "reload" && !this.reloadPressed) this.reloadPressed = true;
+        if (action === "aim" || action === "fire" || action === "reload") this.showDebug(action);
+        button.setPointerCapture?.((event as PointerEvent).pointerId);
       });
-      this.listen(button, "pointerup", () => this.releaseAction(button.dataset.touchAction));
-      this.listen(button, "pointercancel", () => this.releaseAction(button.dataset.touchAction));
+      this.listen(button, "pointerup", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.releaseAction(button.dataset.touchAction);
+      });
+      this.listen(button, "pointercancel", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.releaseAction(button.dataset.touchAction);
+      });
     });
   }
 
@@ -48,7 +59,7 @@ export class TouchInputManager {
   }
 
   isActive() {
-    return this.movePointer !== null || this.lookPointer !== null || Math.abs(this.moveX) > 0.01 || Math.abs(this.moveY) > 0.01 || this.jump || this.crouch || this.sprint;
+    return this.movePointer !== null || this.lookPointer !== null || Math.abs(this.moveX) > 0.01 || Math.abs(this.moveY) > 0.01 || this.jump || this.crouch || this.sprint || this.aiming || this.firing || this.reloadPressed;
   }
 
   dispose() {
@@ -110,6 +121,15 @@ export class TouchInputManager {
   private setKnob(x: number, y: number) {
     const knob = document.getElementById("touch-knob");
     if (knob) knob.style.transform = `translate(${x * 42}px, ${-y * 42}px)`;
+  }
+
+  private showDebug(action: string) {
+    const label = action === "aim" ? "AIM INPUT OK" : action === "fire" ? "FIRE INPUT OK" : "RELOAD INPUT OK";
+    const element = document.getElementById("input-debug");
+    if (!element) return;
+    element.textContent = label;
+    element.classList.add("active");
+    window.setTimeout(() => element.classList.remove("active"), 1000);
   }
 
   private releaseAction(action?: string) {

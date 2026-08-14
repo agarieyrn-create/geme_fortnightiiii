@@ -107,3 +107,11 @@ button { font: inherit; }
 
 /* Real 3D player diagnostic: the live avatar is a GLB skinned mesh, never a billboard. */
 .rig-status { display: block; margin-top: 4px; color: rgba(157, 226, 217, .65); font-family: "Chakra Petch", sans-serif; font-size: 8px; letter-spacing: .12em; }
+
+/* Mobile combat input verification: button layer owns touch gestures; the HUD remains pass-through. */
+.input-debug { position: absolute; top: 54%; left: 50%; z-index: 16; padding: 7px 11px; border: 1px solid rgba(19,217,196,.75); background: rgba(3,15,27,.88); color: #bffff6; font-family: "Chakra Petch", sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .12em; opacity: 0; pointer-events: none; transform: translate(-50%, 8px); transition: opacity .12s ease, transform .12s ease; }
+.input-debug.active { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 767px), (pointer: coarse) {
+  .touch-actions { z-index: 20; }
+  .touch-actions button { position: relative; z-index: 21; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+}
