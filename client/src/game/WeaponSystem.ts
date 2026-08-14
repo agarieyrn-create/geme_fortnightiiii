@@ -2,7 +2,7 @@
 import type { WeaponState, FireRequest } from "./contracts";
 
 export class WeaponSystem {
-  readonly state: WeaponState = { magazine: 30, reserve: 90, cooldown: 0, reloadTimer: 0, isReloading: false };
+  readonly state: WeaponState = { magazine: 30, reserve: 120, cooldown: 0, reloadTimer: 0, isReloading: false };
   readonly magazineSize = 30;
   readonly fireInterval = 0.145;
 

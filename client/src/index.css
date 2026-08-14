@@ -98,10 +98,11 @@ button { font: inherit; }
   .touch-stick::before { position: absolute; inset: 15px; border: 1px dashed rgba(150, 224, 218, .26); border-radius: 50%; content: ""; }
   .touch-knob { position: absolute; top: 50%; left: 50%; width: 45px; height: 45px; margin: -22.5px; border: 1px solid rgba(180, 255, 244, .72); border-radius: 50%; background: rgba(19, 217, 196, .32); box-shadow: 0 0 22px rgba(19, 217, 196, .24); transition: transform .08s ease-out; }
   .touch-swipe-hint { position: absolute; top: 50%; right: 18px; color: rgba(213, 245, 241, .46); font-family: "Chakra Petch", sans-serif; font-size: 8px; letter-spacing: .18em; transform: rotate(90deg); transform-origin: right center; }
-  .touch-actions { position: absolute; right: 18px; bottom: 34px; display: flex; align-items: end; gap: 8px; pointer-events: auto; }
-  .touch-actions button { min-width: 52px; min-height: 42px; padding: 7px 6px; border: 1px solid rgba(19, 217, 196, .6); background: rgba(4, 18, 30, .72); color: #c9fff8; font-family: "Chakra Petch", sans-serif; font-size: 8px; font-weight: 700; letter-spacing: .08em; backdrop-filter: blur(6px); }
+  .touch-actions { position: absolute; right: 18px; bottom: 28px; display: grid; grid-template-columns: repeat(3, minmax(48px, 1fr)); gap: 7px; width: min(205px, 52vw); pointer-events: auto; }
+  .touch-actions button { min-width: 0; min-height: 40px; padding: 6px 4px; border: 1px solid rgba(19, 217, 196, .6); background: rgba(4, 18, 30, .72); color: #c9fff8; font-family: "Chakra Petch", sans-serif; font-size: 8px; font-weight: 700; letter-spacing: .08em; backdrop-filter: blur(6px); }
+  .touch-actions button:nth-child(1), .touch-actions button:nth-child(2), .touch-actions button:nth-child(3) { border-color: rgba(246, 182, 73, .78); color: #ffe6af; }
   .touch-actions button:active { background: rgba(19, 217, 196, .46); transform: scale(.95); }
-  .step1-mode .control-strip { bottom: 8px; font-size: 8px; }
+  .combat-mode .control-strip { bottom: 8px; font-size: 8px; }
 }
 
 /* Real 3D player diagnostic: the live avatar is a GLB skinned mesh, never a billboard. */

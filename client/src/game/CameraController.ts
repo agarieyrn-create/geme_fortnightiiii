@@ -8,6 +8,7 @@ export class CameraController {
   yaw = Math.PI;
   pitch = -0.16;
   private readonly forwardVector = new Vector3();
+  private recoil = 0;
 
   constructor(readonly camera: UniversalCamera, private readonly obstacles: CameraObstacle[]) {
     camera.minZ = 0.05;
@@ -29,11 +30,20 @@ export class CameraController {
     return this.forwardVector.clone();
   }
 
+  aimDirection() {
+    return this.camera.getForwardRay(300).direction.normalize();
+  }
+
+  addRecoil(amount = 0.014) {
+    this.recoil = Math.min(0.08, this.recoil + amount);
+  }
+
   update(delta: number, targetPosition: Vector3, aiming: boolean, crouching: boolean) {
     const forward = this.forward();
     const shoulder = new Vector3(Math.cos(this.yaw) * (aiming ? 0.82 : 1.25), 0, -Math.sin(this.yaw) * (aiming ? 0.82 : 1.25));
+    this.recoil *= Math.exp(-delta * 18);
     const target = targetPosition.add(new Vector3(0, crouching ? 1.0 : 1.42, 0));
-    const distance = aiming ? 4.65 : 7.4;
+    const distance = aiming ? 5.4 : 7.4;
     const desired = target.subtract(forward.scale(distance)).add(new Vector3(0, (aiming ? 2.65 : 3.7) + this.pitch * 2.2, 0)).add(shoulder);
     let safePosition = desired.clone();
     const segment = desired.subtract(target);
@@ -49,6 +59,6 @@ export class CameraController {
       }
     });
     this.camera.position = Vector3.Lerp(this.camera.position, safePosition, 1 - Math.exp(-delta * 10));
-    this.camera.setTarget(target.add(forward.scale(aiming ? 6 : 8)).add(new Vector3(0, this.pitch * 4, 0)));
+    this.camera.setTarget(target.add(forward.scale(aiming ? 2.5 : 8)).add(new Vector3(0, aiming ? 0.65 : (this.pitch - this.recoil) * 4, 0)));
   }
 }

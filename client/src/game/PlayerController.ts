@@ -6,7 +6,7 @@ import { CameraController } from "./CameraController";
 import { WeaponSystem } from "./WeaponSystem";
 
 type Obstacle = { position: Vector3; radius: number };
-type PlayerRig = { root: { position: Vector3; rotation: Vector3 }; velocityY: number; alive: boolean; setMotionState: (state: MotionState) => void; setColliderHeight?: (height: number) => void; updateVisual: (delta: number) => void };
+type PlayerRig = { root: { position: Vector3; rotation: Vector3 }; velocityY: number; alive: boolean; setMotionState: (state: MotionState) => void; setAiming?: (aiming: boolean) => void; setColliderHeight?: (height: number) => void; updateVisual: (delta: number) => void };
 
 export class PlayerController {
   private moveVelocity = new Vector3();
@@ -23,6 +23,7 @@ export class PlayerController {
 
   update(delta: number, snapshot: InputSnapshot, obstacles: Obstacle[], resolveObstacles: (position: Vector3, clearance: number) => void, onFire: (origin: Vector3, direction: Vector3) => void, onEvent: (message: string) => void) {
     this.aiming = snapshot.aiming;
+    this.rig.setAiming?.(this.aiming);
     const grounded = this.rig.root.position.y <= 0.025 && this.rig.velocityY <= 0.2;
     this.crouching = snapshot.crouch && grounded;
     this.rig.setColliderHeight?.(this.crouching ? 1.55 : 2.4);
@@ -65,8 +66,9 @@ export class PlayerController {
 
     this.weapon.update(delta);
     if (snapshot.reloadPressed) this.weapon.reload();
-    const muzzle = this.rig.root.position.add(new Vector3(0, this.crouching ? 0.94 : 1.32, 0)).add(forward.scale(0.8));
-    if (snapshot.firing) this.weapon.fire({ origin: muzzle, direction: forward.add(new Vector3(0, this.camera.pitch * 0.42, 0)).normalize(), damage: 25 }, (request) => onFire(request.origin, request.direction));
+    const aimDirection = this.camera.aimDirection();
+    const muzzle = this.rig.root.position.add(new Vector3(0, this.crouching ? 0.94 : 1.32, 0)).add(aimDirection.scale(0.8));
+    if (snapshot.firing) this.weapon.fire({ origin: muzzle, direction: aimDirection, damage: 25 }, (request) => onFire(request.origin, request.direction));
 
     let nextMotion: MotionState;
     if (this.weapon.state.isReloading) nextMotion = "RELOAD";

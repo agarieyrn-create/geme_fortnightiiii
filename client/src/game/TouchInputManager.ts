@@ -9,6 +9,9 @@ export class TouchInputManager {
   private jump = false;
   private crouch = false;
   private sprint = false;
+  private aiming = false;
+  private firing = false;
+  private reloadPressed = false;
   private movePointer: number | null = null;
   private lookPointer: number | null = null;
   private lastLookX = 0;
@@ -27,6 +30,9 @@ export class TouchInputManager {
         if (action === "jump") this.jump = true;
         if (action === "crouch") this.crouch = true;
         if (action === "sprint") this.sprint = true;
+        if (action === "aim") this.aiming = true;
+        if (action === "fire") this.firing = true;
+        if (action === "reload" && !this.reloadPressed) this.reloadPressed = true;
       });
       this.listen(button, "pointerup", () => this.releaseAction(button.dataset.touchAction));
       this.listen(button, "pointercancel", () => this.releaseAction(button.dataset.touchAction));
@@ -34,9 +40,10 @@ export class TouchInputManager {
   }
 
   snapshot(): InputSnapshot {
-    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint, crouch: this.crouch, aiming: false, firing: false, reloadPressed: false, lookX: this.lookX, lookY: this.lookY };
+    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint, crouch: this.crouch, aiming: this.aiming, firing: this.firing, reloadPressed: this.reloadPressed, lookX: this.lookX, lookY: this.lookY };
     this.lookX = 0;
     this.lookY = 0;
+    this.reloadPressed = false;
     return snapshot;
   }
 
@@ -109,6 +116,8 @@ export class TouchInputManager {
     if (action === "jump") this.jump = false;
     if (action === "crouch") this.crouch = false;
     if (action === "sprint") this.sprint = false;
+    if (action === "aim") this.aiming = false;
+    if (action === "fire") this.firing = false;
   }
 
   private listen(target: EventTarget, name: string, handler: (event: Event) => void) {

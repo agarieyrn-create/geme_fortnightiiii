@@ -17,3 +17,14 @@ The current desktop capture shows the player as the actual RobotExpressive skinn
 The live path keeps `PlayerController` movement unchanged: camera forward remains `(sin(yaw), 0, cos(yaw))`, right remains `(forward.z, 0, -forward.x)`, and target yaw remains `atan2(direction.x, direction.z)` with shortest-angle interpolation. The correction is isolated to `HumanoidModelController`: `RobotExpressive.glb` now uses local yaw `0` instead of the previous `Math.PI` offset.
 
 The desktop demo screenshot shows `WALK_FORWARD` while the third-person camera is behind the robot, so the visible back is expected for a correctly forward-facing character; the model's backpack is on the camera-facing side while its movement direction is toward the scene center. The mobile demo shows the same GLB mesh and `WALK_FORWARD` state with the joystick and Jump/Crouch/Run controls still present. No map, UI, weapon, enemy, or movement-vector changes were made.
+
+## STEP 2 — TPS基本射撃
+
+- 単一の3D ARC PULSE RIFLEを追加し、RobotExpressive GLBの右手Bone由来Weapon Socketへ親子付けした。移動、走行、ジャンプ、しゃがみ時もSocket階層に追従する構造にした。
+- PCのRMB Aim／LMB Fire／R Reload、モバイルのAIM／FIRE／RELOADをInputSnapshotへ接続した。Aim時は肩越し距離、クロスヘア、速度低下、上半身保持姿勢、カメラリコイルを適用した。
+- 中央カメラForwardからRayを発生させ、練習ターゲット上のAimPointを取得し、銃口originからAimPointへ射撃方向を再計算した。移動ベクトルは反転していない。
+- 5体の3D訓練ターゲットを追加し、HP 100、Damage 25、4発破壊、Hit Marker、Impact Torus、破壊イベントを実装した。
+- 30／120弾薬、長押し連射、0.145秒間隔、リロードロック、トレーサー、マズルフラッシュ、発射音、カメラリコイルを実装した。
+- RobotExpressive GLBは20 Mesh・2 Skeletonとしてロードされることを確認した。PBRシェーダー経路の描画失敗に備え、実Mesh／Skeletonを維持したままStandardMaterialフォールバックを適用した。
+- PC（1280x720）とモバイル（390x844）のデモ画面で、STEP 2 HUD、クロスヘア、5体ターゲット、実3D Humanoid、タッチボタン、左ジョイスティックを確認した。TypeScriptチェックと本番ビルドは成功。
+- 既存のマップ、三人称カメラ、WASD、モバイル移動、ジャンプ、しゃがみ、ダッシュは維持した。敵AI、複数武器、アイテム、建築、ストーム、オンライン対戦はSTEP 2では追加していない。

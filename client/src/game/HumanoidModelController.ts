@@ -2,6 +2,8 @@
 import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import { ImportMeshAsync } from "@babylonjs/core/Loading/sceneLoader";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
@@ -17,6 +19,7 @@ type ClipName = "Idle" | "Walk" | "Run" | "Jump";
 
 export class HumanoidModelController {
   private modelRoot?: TransformNode;
+  private weaponSocket?: TransformNode;
   private readonly groups = new Map<ClipName, AnimationGroup>();
   private current?: AnimationGroup;
   private target?: AnimationGroup;
@@ -36,11 +39,27 @@ export class HumanoidModelController {
       const modelRoot = this.modelRoot;
       modelRoot.parent = this.anchor;
       modelRoot.position.y = 0;
-      modelRoot.scaling.setAll(0.78);
+      modelRoot.scaling.setAll(0.28);
       modelRoot.rotation.y = HUMANOID_LOCAL_YAW;
+      this.weaponSocket = new TransformNode(`${this.id}-weapon-socket`, this.scene);
+      this.weaponSocket.parent = modelRoot;
+      this.weaponSocket.position.set(0.48, 1.16, 0.34);
+      this.weaponSocket.rotation.set(0.08, 0.18, -0.18);
+      const handBone = result.skeletons[0]?.bones.find((bone) => /hand|wrist/i.test(bone.name));
+      const handNode = handBone?.getTransformNode();
+      if (handNode) {
+        this.weaponSocket.parent = handNode;
+        this.weaponSocket.position.set(0.08, 0.02, 0.12);
+        this.weaponSocket.rotation.set(0, 0, 0);
+      }
+      const humanoidFallbackMaterial = new StandardMaterial(`${this.id}-humanoid-fallback-material`, this.scene);
+      humanoidFallbackMaterial.diffuseColor = new Color3(0.22, 0.34, 0.42);
+      humanoidFallbackMaterial.specularColor = new Color3(0.18, 0.2, 0.22);
+      humanoidFallbackMaterial.emissiveColor = new Color3(0.012, 0.035, 0.045);
       result.meshes.forEach((mesh: AbstractMesh) => {
         if (mesh.parent === null) mesh.parent = modelRoot;
         mesh.isPickable = false;
+        mesh.material = humanoidFallbackMaterial;
       });
       result.skeletons.forEach((skeleton) => this.skeletonCountPush(skeleton.bones.length));
       result.animationGroups.forEach((group) => {
@@ -88,6 +107,25 @@ export class HumanoidModelController {
     next.setWeightForAllAnimatables(0);
     this.target = next;
     this.blend = 0;
+  }
+
+  getWeaponSocket() {
+    return this.weaponSocket ?? this.anchor;
+  }
+
+  attachWeapon(weapon: TransformNode) {
+    const socket = this.getWeaponSocket();
+    if (weapon.parent !== socket) weapon.parent = socket;
+    weapon.position.set(0.08, -0.03, -0.16);
+    weapon.rotation.set(0, 0, Math.PI / 2.8);
+  }
+
+  setArmedPose(aiming: boolean, firing: boolean, crouched: boolean) {
+    if (!this.weaponSocket) return;
+    const targetX = crouched ? 0.18 : aiming ? -0.2 : 0.08;
+    const targetZ = firing ? -0.28 : aiming ? -0.12 : -0.18;
+    this.weaponSocket.rotation.x += (targetX - this.weaponSocket.rotation.x) * 0.24;
+    this.weaponSocket.rotation.z += (targetZ - this.weaponSocket.rotation.z) * 0.24;
   }
 
   dispose() {

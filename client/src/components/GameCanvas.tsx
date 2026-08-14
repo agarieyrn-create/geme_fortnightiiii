@@ -46,7 +46,7 @@ export default function GameCanvas() {
 
     void createGameScene(engine, canvas, {
       demo: isDemo,
-      step: "step1",
+      step: "step2",
       onResult: (nextOutcome) => {
         setOutcome(nextOutcome);
         if (document.pointerLockElement === canvas) document.exitPointerLock();
@@ -86,7 +86,7 @@ export default function GameCanvas() {
   };
 
   return (
-    <main className="stormfall-shell step1-mode">
+    <main className="stormfall-shell combat-mode">
       <canvas
         aria-label="Stormfall: Last Horizon の3Dゲーム画面"
         ref={canvasRef}
@@ -97,13 +97,16 @@ export default function GameCanvas() {
         <div className="touch-stick" aria-hidden="true"><div id="touch-knob" className="touch-knob" /></div>
         <span className="touch-swipe-hint">SWIPE TO LOOK</span>
         <div className="touch-actions">
+          <button type="button" data-touch-action="aim">AIM</button>
+          <button type="button" data-touch-action="fire">FIRE</button>
+          <button type="button" data-touch-action="reload">RELOAD</button>
           <button type="button" data-touch-action="jump">JUMP</button>
           <button type="button" data-touch-action="crouch">CROUCH</button>
           <button type="button" data-touch-action="sprint">RUN</button>
         </div>
       </div>
 
-      <div id="hud" className="stormfall-hud step1-hud" aria-live="polite">
+      <div id="hud" className="stormfall-hud combat-hud" aria-live="polite">
         <header className="hud-topbar">
           <div className="brand-lockup">
             <img src={LOGO_URL} alt="Stormfall emblem" />
@@ -114,7 +117,7 @@ export default function GameCanvas() {
           </div>
           <div className="storm-readout">
 <span className="eyebrow">EXPLORATION MODE</span>
-              <strong id="storm-timer">STEP 1 // EXPLORE</strong>
+              <strong id="storm-timer">STEP 2 // LIVE FIRE</strong>
               <small className="rig-status">PLAYER RIG // GLB HUMANOID · SKELETON</small>
           </div>
           <div className="remaining-readout">
@@ -142,7 +145,7 @@ export default function GameCanvas() {
 
         <section className="combat-panel" aria-label="武器状態">
           <div className="weapon-tag"><span className="weapon-dot" />ARC PULSE RIFLE <i id="aim-status">HIP</i></div>
-          <div className="ammo-value"><strong id="ammo-value">30</strong><span>/ <i id="reserve-value">90</i></span></div>
+          <div className="ammo-value"><strong id="ammo-value">30</strong><span>/ <i id="reserve-value">120</i></span></div>
           <div className="weapon-slots"><i className="selected">1</i><i>2</i><i>3</i><i>4</i></div>
         </section>
 
@@ -155,7 +158,7 @@ export default function GameCanvas() {
         <div className="state-chip"><span>MOVE STATE</span><strong id="motion-state">IDLE</strong><i id="crouch-state">STAND</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>
         <ol id="event-feed" className="event-feed" aria-label="戦闘ログ" />
-        <p className="control-strip">WASD 移動 <b>·</b> SHIFT ダッシュ <b>·</b> SPACE ジャンプ <b>·</b> C / CTRL しゃがみ <b>·</b> マウス Orbit</p>
+        <p className="control-strip">WASD 移動 <b>·</b> SHIFT ダッシュ <b>·</b> RMB AIM <b>·</b> LMB FIRE <b>·</b> R リロード <b>·</b> SPACE ジャンプ <b>·</b> C / CTRL しゃがみ</p>
       </div>
 
       {!started && (
@@ -165,8 +168,8 @@ export default function GameCanvas() {
             <p className="kicker">SOLO EXPEDITION // RIFT-07</p>
             <h1>嵐の外縁で、<em>次の一手</em>を奪え。</h1>
             <p className="launch-copy">浮遊群島に降下し、物資を確保せよ。電磁嵐が収束する前に、最後の生存者を決める。</p>
-            <button type="button" className="launch-button" onClick={beginMatch}>STEP 1を開始 <span>↗</span></button>
-            <p className="launch-note">STEP 1 — 3D探索基盤 / 戦闘システムは次の段階で追加</p>
+            <button type="button" className="launch-button" onClick={beginMatch}>STEP 2を開始 <span>↗</span></button>
+            <p className="launch-note">STEP 2 — LIVE FIRE / 5体の射撃訓練ターゲット</p>
           </div>
           <aside className="avatar-chooser" aria-label="降下アバター選択">
             <div className="chooser-heading"><span>DEPLOYMENT LOADOUT</span><strong>アバターを選択</strong></div>

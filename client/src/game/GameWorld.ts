@@ -1,13 +1,12 @@
 // Stormfall: Last Horizon design contract — readable arcade-sci-fi combat across warm sandstone, black basalt, and a teal storm ring.
-import "@babylonjs/core/Shaders/default.fragment";
-import "@babylonjs/core/Shaders/default.vertex";
-import "@babylonjs/core/Shaders/standard.fragment";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Ray } from "@babylonjs/core/Culling/ray";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Scene } from "@babylonjs/core/scene";
@@ -41,7 +40,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; step: "step1" | "full"; onResult: (outcome: MatchOutcome) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "full"; onResult: (outcome: MatchOutcome) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -55,6 +54,12 @@ type Pickup = {
   root: TransformNode;
   type: "ammo" | "shield" | "med";
   collected: boolean;
+};
+
+type TrainingTarget = {
+  root: TransformNode;
+  hp: number;
+  alive: boolean;
 };
 
 type Obstacle = { position: Vector3; radius: number };
@@ -72,6 +77,8 @@ class Combatant {
   private colliderHeight = 2.4;
   private readonly animationController = new AnimationController();
   private readonly humanoid?: HumanoidModelController;
+  private weaponMount?: TransformNode;
+  private aiming = false;
   private motionState = "IDLE";
   private poseTime = 0;
   private baseScale = 1;
@@ -208,6 +215,8 @@ class Combatant {
     this.bodyMaterial.emissiveColor = this.flash > 0 ? new Color3(0.9, 0.9, 0.9) : Color3.Black();
     this.animationController.update(delta, this.motionState as import("./contracts").MotionState, this.limbs, this.root, this.baseScale);
     this.humanoid?.update(delta, this.motionState as import("./contracts").MotionState);
+    this.humanoid?.setArmedPose(this.aiming || this.motionState === "FIRE", this.motionState === "FIRE", this.motionState === "CROUCH_IDLE" || this.motionState === "CROUCH_WALK");
+    if (this.weaponMount) this.humanoid?.attachWeapon(this.weaponMount);
   }
 
   dispose() {
@@ -227,6 +236,10 @@ class Combatant {
   setMotionState(state: string) {
     this.motionState = state;
     this.humanoid?.setMotion(state as import("./contracts").MotionState);
+  }
+
+  setAiming(aiming: boolean) {
+    this.aiming = aiming;
   }
 
   setColliderHeight(height: number) {
@@ -253,6 +266,7 @@ class Combatant {
 
   private createWeapon() {
     const weapon = new TransformNode(`${this.id}-weapon`, this.scene);
+    this.weaponMount = weapon;
     weapon.parent = this.root;
     weapon.position.set(0.72, 1.14, -0.35);
     weapon.rotation.z = Math.PI / 2.8;
@@ -314,10 +328,12 @@ export class GameWorld {
   readonly obstacles: Obstacle[] = this.worldBuilder.obstacles;
   readonly projectiles: Projectile[] = [];
   readonly pickups: Pickup[] = [];
+  readonly trainingTargets: TrainingTarget[] = [];
   private readonly cameraController: CameraController;
   private readonly weaponSystem: WeaponSystem;
   private readonly playerController: PlayerController;
   private readonly hudController = new HudController();
+  private audioContext?: AudioContext;
   private readonly stormRing?: Mesh;
   private readonly stormCore?: Mesh;
   private readonly terrainMaterial: StandardMaterial;
@@ -332,7 +348,7 @@ export class GameWorld {
   elapsed = 0;
   stormRadius = 93;
   ammo = 30;
-  reserve = 90;
+  reserve = 120;
   elims = 0;
   private reloadTimer = 0;
   private moveVelocity = new Vector3();
@@ -369,6 +385,8 @@ export class GameWorld {
       this.createPickups();
       this.stormRing = this.createStormRing();
       this.stormCore = this.createStormCore();
+    } else if (options.step === "step2") {
+      this.createTrainingTargets();
     }
 
     this.camera = new UniversalCamera("ranger-camera", new Vector3(0, 5, 43), scene);
@@ -405,6 +423,8 @@ export class GameWorld {
         this.updateProjectiles(delta);
         this.updatePickups(delta);
         this.checkEndState();
+      } else if (this.options.step === "step2") {
+        this.updateProjectiles(delta);
       }
     }
     this.updateCamera(delta);
@@ -413,6 +433,46 @@ export class GameWorld {
       this.updateHud();
       this.uiTick = 0.1;
     }
+  }
+
+  private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3) {
+    const ray = new Ray(this.camera.position, cameraDirection.normalize(), 180);
+    const pick = this.scene.pickWithRay(ray, (mesh) => Boolean(mesh.metadata?.trainingTargetId));
+    const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(cameraDirection.normalize().scale(180));
+    const shotDirection = aimPoint.subtract(origin).normalize();
+    this.spawnProjectile(origin, shotDirection, "player", 25);
+    this.playShotSound();
+    this.cameraController.addRecoil(0.014);
+    const tracer = MeshBuilder.CreateLines("bullet-tracer", { points: [origin, origin.add(shotDirection.scale(4.2))] }, this.scene);
+    tracer.color = TEAL;
+    window.setTimeout(() => tracer.dispose(), 85);
+  }
+
+  private playShotSound() {
+    if (typeof window === "undefined") return;
+    this.audioContext ??= new AudioContext();
+    if (this.audioContext.state === "suspended") void this.audioContext.resume();
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(135, this.audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(58, this.audioContext.currentTime + 0.07);
+    gain.gain.setValueAtTime(0.035, this.audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.08);
+    oscillator.connect(gain).connect(this.audioContext.destination);
+    oscillator.start();
+    oscillator.stop(this.audioContext.currentTime + 0.08);
+  }
+
+  private createImpact(position: Vector3, destroyed = false) {
+    const impact = MeshBuilder.CreateTorus("target-impact", { diameter: destroyed ? 0.8 : 0.48, thickness: 0.045, tessellation: 16 }, this.scene);
+    impact.position.copyFrom(position);
+    impact.rotation.x = Math.PI / 2;
+    const material = new StandardMaterial("target-impact-mat", this.scene);
+    material.emissiveColor = destroyed ? AMBER : TEAL;
+    material.disableLighting = true;
+    impact.material = material;
+    window.setTimeout(() => impact.dispose(), destroyed ? 220 : 110);
   }
 
   spawnProjectile(origin: Vector3, direction: Vector3, owner: "player" | "rival", damage: number) {
@@ -455,6 +515,7 @@ export class GameWorld {
     this.player.dispose();
     this.enemyDirector.dispose();
     this.pickups.forEach((pickup) => pickup.root.dispose(false, true));
+    this.trainingTargets.forEach((target) => target.root.dispose(false, true));
     this.projectiles.forEach((projectile) => projectile.mesh.dispose());
   }
 
@@ -702,6 +763,37 @@ export class GameWorld {
     }
   }
 
+  private createTrainingTargets() {
+    const placements = [[-10, 18], [0, 12], [10, 18], [-18, 2], [18, 2]] as const;
+    const bodyMat = new StandardMaterial("training-target-body", this.scene);
+    bodyMat.diffuseColor = new Color3(0.12, 0.18, 0.2);
+    const coreMat = new StandardMaterial("training-target-core", this.scene);
+    coreMat.emissiveColor = AMBER;
+    coreMat.disableLighting = true;
+    placements.forEach(([x, z], index) => {
+      const root = new TransformNode(`training-target-${index + 1}`, this.scene);
+      root.position.set(x, 0, z);
+      root.metadata = { trainingTargetId: index + 1 };
+      const body = MeshBuilder.CreateCylinder(`training-target-body-${index + 1}`, { height: 2.2, diameterTop: 1.1, diameterBottom: 1.35, tessellation: 12 }, this.scene);
+      body.parent = root;
+      body.position.y = 1.1;
+      body.material = bodyMat;
+      body.metadata = { trainingTargetId: index + 1 };
+      const core = MeshBuilder.CreateSphere(`training-target-core-${index + 1}`, { diameter: 0.62, segments: 12 }, this.scene);
+      core.parent = root;
+      core.position.y = 1.45;
+      core.material = coreMat;
+      core.metadata = { trainingTargetId: index + 1 };
+      const ring = MeshBuilder.CreateTorus(`training-target-ring-${index + 1}`, { diameter: 1.75, thickness: 0.05, tessellation: 24 }, this.scene);
+      ring.parent = root;
+      ring.position.y = 1.1;
+      ring.rotation.x = Math.PI / 2;
+      ring.material = coreMat;
+      ring.metadata = { trainingTargetId: index + 1 };
+      this.trainingTargets.push({ root, hp: 100, alive: true });
+    });
+  }
+
   private createRivals() {
     [new Vector3(-26, 0, 18), new Vector3(29, 0, 10), new Vector3(-10, 0, -34), new Vector3(37, 0, -39)].forEach((position, index) => {
       const rival = new Rival(this.scene, `rival-${index + 1}`, position);
@@ -782,7 +874,7 @@ export class GameWorld {
   private updatePlayer(delta: number) {
     const rawSnapshot = this.options.demo ? this.demoInput() : this.touchInput.isActive() ? this.touchInput.snapshot() : this.input.snapshot();
     const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : rawSnapshot;
-    this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.spawnProjectile(origin, direction, "player", 25), (message) => this.pushEvent(message));
+    this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.fireAtAimPoint(origin, direction), (message) => this.pushEvent(message));
     this.currentAiming = this.playerController.aiming;
     this.currentCrouching = this.playerController.crouching;
     this.lastMotionState = this.playerController.motion;
@@ -866,11 +958,26 @@ export class GameWorld {
         if (target) {
           const eliminated = target.applyDamage(projectile.damage);
           this.showHitMarker();
+          this.createImpact(projectile.mesh.position, eliminated);
           if (eliminated) {
             this.elims += 1;
             this.pushEvent(`${target.id.toUpperCase()} を排除`);
           }
           hit = true;
+        } else {
+          const training = this.trainingTargets.find((candidate) => candidate.alive && Vector3.DistanceSquared(projectile.mesh.position, candidate.root.position.add(new Vector3(0, 1.1, 0))) < 1.65);
+          if (training) {
+            training.hp = Math.max(0, training.hp - projectile.damage);
+            const destroyed = training.hp === 0;
+            training.alive = !destroyed;
+            this.showHitMarker();
+            this.createImpact(projectile.mesh.position, destroyed);
+            if (destroyed) {
+              training.root.setEnabled(false);
+              this.pushEvent("射撃ターゲットを破壊");
+            }
+            hit = true;
+          }
         }
       } else if (this.player.alive && Vector3.DistanceSquared(projectile.mesh.position, this.player.root.position.add(new Vector3(0, 1, 0))) < 1.45) {
         const eliminated = this.player.applyDamage(projectile.damage);
@@ -950,20 +1057,15 @@ export class GameWorld {
   }
 
   private demoInput(): InputSnapshot {
-    const closest = this.rivals.filter((rival) => rival.alive).sort((a, b) => Vector3.DistanceSquared(a.root.position, this.player.root.position) - Vector3.DistanceSquared(b.root.position, this.player.root.position))[0];
-    if (closest) {
-      const direction = closest.root.position.subtract(this.player.root.position);
-      this.yaw = Math.atan2(direction.x, direction.z);
-    } else {
-      this.yaw += 0.2;
-    }
+    const rival = this.rivals.filter((candidate) => candidate.alive).sort((a, b) => Vector3.DistanceSquared(a.root.position, this.player.root.position) - Vector3.DistanceSquared(b.root.position, this.player.root.position))[0];
+    const training = this.trainingTargets.filter((candidate) => candidate.alive).sort((a, b) => Vector3.DistanceSquared(a.root.position, this.player.root.position) - Vector3.DistanceSquared(b.root.position, this.player.root.position))[0];
+    this.yaw = Math.PI;
     this.cameraController.setYaw(this.yaw);
-    const radius = this.player.root.position.length();
-    return { forward: radius > this.stormRadius - 9 ? -1 : 0.75, right: Math.sin(this.elapsed * 0.9) * 0.55, jump: false, sprint: false, crouch: false, aiming: false, firing: Boolean(closest), reloadPressed: false, lookX: 0, lookY: 0 };
+    return { forward: 0, right: 0, jump: false, sprint: false, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, lookX: 0, lookY: 0 };
   }
 
   private updateHud(_force = false) {
-    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
       shield: this.player.shield,
