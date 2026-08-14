@@ -52,7 +52,7 @@ export default function GameCanvas() {
 
     void createGameScene(engine, canvas, {
       demo: isDemo,
-      step: "step3",
+      step: "step4",
       avatarId: selectedAvatarRef.current,
       onResult: (nextOutcome) => {
         setOutcome(nextOutcome);
@@ -96,7 +96,7 @@ export default function GameCanvas() {
   };
 
   return (
-    <main className="stormfall-shell combat-mode">
+    <main className="stormfall-shell combat-mode step4-mode">
       <canvas
         aria-label="Stormfall: Last Horizon の3Dゲーム画面"
         ref={canvasRef}
@@ -107,6 +107,11 @@ export default function GameCanvas() {
         <div className="touch-stick" aria-hidden="true"><div id="touch-knob" className="touch-knob" /></div>
         <span className="touch-swipe-hint">SWIPE TO LOOK</span>
         <div className="touch-actions">
+          <button type="button" data-touch-action="pickup">PICKUP</button>
+          <button type="button" data-touch-action="medkit">MED KIT</button>
+          <button type="button" data-touch-action="slot1">SLOT 1</button>
+          <button type="button" data-touch-action="slot2">SLOT 2</button>
+          <button type="button" data-touch-action="slot3">SLOT 3</button>
           <button type="button" data-touch-action="aim">AIM</button>
           <button type="button" data-touch-action="fire">FIRE</button>
           <button type="button" data-touch-action="reload">RELOAD</button>
@@ -127,7 +132,7 @@ export default function GameCanvas() {
           </div>
           <div className="storm-readout">
 <span className="eyebrow">EXPLORATION MODE</span>
-              <strong id="storm-timer">STEP 3 // HOSTILE CONTACT</strong>
+              <strong id="storm-timer">STEP 4 // SCAVENGE</strong>
               <small className="rig-status">PLAYER RIG // GLB HUMANOID · SKELETON</small>
           </div>
           <div className="remaining-readout">
@@ -154,9 +159,9 @@ export default function GameCanvas() {
         </section>
 
         <section className="combat-panel" aria-label="武器状態">
-          <div className="weapon-tag"><span className="weapon-dot" />ARC PULSE RIFLE <i id="aim-status">HIP</i></div>
+          <div className="weapon-tag"><span className="weapon-dot" /><span id="weapon-name">NO WEAPON</span> <i id="aim-status">HIP</i></div>
           <div className="ammo-value"><strong id="ammo-value">30</strong><span>/ <i id="reserve-value">120</i></span></div>
-          <div className="weapon-slots"><i className="selected">1</i><i>2</i><i>3</i><i>4</i></div>
+          <div className="weapon-slots"><i id="slot-1" className="selected">EMPTY</i><i id="slot-2">EMPTY</i><i id="slot-3">EMPTY</i></div><div id="medkit-value" className="medkit-value">MED KIT ×0</div>
         </section>
 
         <section className="signal-card" aria-label="近くの補給物資">
@@ -181,8 +186,8 @@ export default function GameCanvas() {
             <p className="kicker">SOLO EXPEDITION // RIFT-07</p>
             <h1>嵐の外縁で、<em>次の一手</em>を奪え。</h1>
             <p className="launch-copy">浮遊群島に降下し、物資を確保せよ。電磁嵐が収束する前に、最後の生存者を決める。</p>
-            <button type="button" className="launch-button" onClick={beginMatch}>STEP 3を開始 <span>↗</span></button>
-            <p className="launch-note">STEP 3 — HOSTILE CONTACT / 3体の敵AI</p>
+            <button type="button" className="launch-button" onClick={beginMatch}>STEP 4を開始 <span>↗</span></button>
+            <p className="launch-note">STEP 4 — SCAVENGE / 拾う・持つ・使う</p>
           </div>
           <aside className="avatar-chooser" aria-label="降下アバター選択">
             <div className="chooser-heading"><span>DEPLOYMENT LOADOUT</span><strong>アバターを選択</strong></div>

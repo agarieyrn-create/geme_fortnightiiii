@@ -143,3 +143,48 @@ button { font: inherit; }
 /* Temporary movement-release diagnostic. */
 .move-input-debug { position: absolute; left: 14px; bottom: 18px; z-index: 12; padding: 4px 6px; border: 1px solid rgba(19, 217, 196, .25); background: rgba(3, 15, 27, .62); color: #9bd9d0; font: 8px/1.2 "Chakra Petch", monospace; pointer-events: none; }
 @media (max-width: 720px) { .move-input-debug { left: 14px; bottom: 154px; } }
+
+/* STEP 4 scavenger controls: compact two-column action grid, preserving the left movement pad and right look surface. */
+.touch-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(70px, 1fr));
+  gap: 7px;
+  max-width: 188px;
+}
+.touch-actions button[data-touch-action="pickup"],
+.touch-actions button[data-touch-action="medkit"] {
+  border-color: rgba(255, 190, 89, 0.72);
+  color: #ffe0a3;
+}
+.medkit-value {
+  margin-top: 7px;
+  color: #ffb5a9;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+/* STEP 4: inactive pickup actions remain visible but clearly unavailable until the player is close enough. */
+.touch-actions button:disabled {
+  opacity: 0.34;
+  filter: saturate(0.45);
+  pointer-events: none;
+}
+
+/* STEP 4 mobile HUD: keep weapon telemetry above the expanded scavenger action grid. */
+@media (max-width: 767px), (pointer: coarse) {
+  .step4-mode .combat-panel {
+    right: 14px;
+    bottom: 315px;
+    width: 178px;
+    transform: scale(.72);
+    transform-origin: right bottom;
+  }
+  .step4-mode .weapon-slots {
+    gap: 4px;
+  }
+  .step4-mode .weapon-slots i {
+    width: 44px;
+    height: 20px;
+    font-size: 7px;
+  }
+}

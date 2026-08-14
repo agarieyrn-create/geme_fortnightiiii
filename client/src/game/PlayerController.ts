@@ -68,14 +68,15 @@ export class PlayerController {
     if (snapshot.reloadPressed) this.weapon.reload();
     const aimDirection = this.camera.aimDirection();
     const muzzle = this.rig.root.position.add(new Vector3(0, this.crouching ? 0.94 : 1.32, 0)).add(aimDirection.scale(0.8));
-    if (snapshot.firing) this.weapon.fire({ origin: muzzle, direction: aimDirection, damage: 25 }, (request) => onFire(request.origin, request.direction));
+    const hasWeapon = this.weapon.definition() !== null;
+    if (snapshot.firing && hasWeapon) this.weapon.fire({ origin: muzzle, direction: aimDirection, damage: 25 }, (request) => onFire(request.origin, request.direction));
 
     let nextMotion: MotionState;
     if (this.weapon.state.isReloading) nextMotion = "RELOAD";
     else if (this.landTimer > 0) nextMotion = "LAND";
     else if (!nowGrounded) nextMotion = this.rig.velocityY > 0 ? (this.jumpStartTimer > 0 ? "JUMP_START" : "JUMP_LOOP") : "FALL";
     else if (this.crouching) nextMotion = moving ? "CROUCH_WALK" : "CROUCH_IDLE";
-    else if (snapshot.firing) nextMotion = "FIRE";
+    else if (snapshot.firing && hasWeapon) nextMotion = "FIRE";
     else if (snapshot.aiming && !moving) nextMotion = "AIM";
     else if (snapshot.sprint && moving) nextMotion = "RUN";
     else if (!moving) nextMotion = "IDLE";

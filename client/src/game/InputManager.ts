@@ -8,6 +8,9 @@ export type InputSnapshot = {
   aiming: boolean;
   firing: boolean;
   reloadPressed: boolean;
+  pickupPressed: boolean;
+  slotPressed: number | null;
+  medkitPressed: boolean;
   lookX: number;
   lookY: number;
 };
@@ -17,6 +20,9 @@ export class InputManager {
   private firing = false;
   private aiming = false;
   private reloadPressed = false;
+  private pickupPressed = false;
+  private slotPressed: number | null = null;
+  private medkitPressed = false;
   private lookX = 0;
   private lookY = 0;
   private readonly cleanup: Array<() => void> = [];
@@ -25,9 +31,12 @@ export class InputManager {
     this.listen(window, "keydown", (event: Event) => {
       const keyboard = event as KeyboardEvent;
       const key = keyboard.key.toLowerCase();
-      if (["w", "a", "s", "d", " ", "shift", "control", "c", "r"].includes(key)) keyboard.preventDefault();
+      if (["w", "a", "s", "d", " ", "shift", "control", "c", "r", "e", "1", "2", "3", "4"].includes(key)) keyboard.preventDefault();
       this.keys.add(key);
       if (key === "r" && !keyboard.repeat) this.reloadPressed = true;
+      if (key === "e" && !keyboard.repeat) this.pickupPressed = true;
+      if (["1", "2", "3"].includes(key) && !keyboard.repeat) this.slotPressed = Number(key);
+      if (key === "4" && !keyboard.repeat) this.medkitPressed = true;
       if (document.pointerLockElement !== this.canvas && key === "enter") this.requestPointerLock();
     });
     this.listen(window, "keyup", (event: Event) => this.keys.delete((event as KeyboardEvent).key.toLowerCase()));
@@ -70,12 +79,18 @@ export class InputManager {
       aiming: this.aiming || this.keys.has("q"),
       firing: this.firing,
       reloadPressed: this.reloadPressed,
+      pickupPressed: this.pickupPressed,
+      slotPressed: this.slotPressed,
+      medkitPressed: this.medkitPressed,
       lookX: this.lookX,
       lookY: this.lookY,
     };
     this.lookX = 0;
     this.lookY = 0;
     this.reloadPressed = false;
+    this.pickupPressed = false;
+    this.slotPressed = null;
+    this.medkitPressed = false;
     return result;
   }
 
@@ -84,6 +99,9 @@ export class InputManager {
     this.firing = false;
     this.aiming = false;
     this.reloadPressed = false;
+    this.pickupPressed = false;
+    this.slotPressed = null;
+    this.medkitPressed = false;
     this.lookX = 0;
     this.lookY = 0;
   }

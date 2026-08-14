@@ -12,6 +12,9 @@ export class TouchInputManager {
   private aiming = false;
   private firing = false;
   private reloadPressed = false;
+  private pickupPressed = false;
+  private slotPressed: number | null = null;
+  private medkitPressed = false;
   private movementPointerId: number | null = null;
   private cameraPointerId: number | null = null;
   private lastLookX = 0;
@@ -38,6 +41,9 @@ export class TouchInputManager {
         if (action === "aim") this.aiming = true;
         if (action === "fire") this.firing = true;
         if (action === "reload" && !this.reloadPressed) this.reloadPressed = true;
+        if (action === "pickup" && !this.pickupPressed) this.pickupPressed = true;
+        if (action?.startsWith("slot")) this.slotPressed = Number(action.slice(-1));
+        if (action === "medkit" && !this.medkitPressed) this.medkitPressed = true;
         if (action === "aim" || action === "fire" || action === "reload") this.showDebug(action);
         button.setPointerCapture?.((event as PointerEvent).pointerId);
       });
@@ -59,17 +65,20 @@ export class TouchInputManager {
     // PC mouse values remain untouched in InputManager.
     const mobileYaw = -this.lookX;
     const mobilePitch = this.lookY * 2.05;
-    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint, crouch: this.crouch, aiming: this.aiming, firing: this.firing, reloadPressed: this.reloadPressed, lookX: mobileYaw, lookY: mobilePitch };
+    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint, crouch: this.crouch, aiming: this.aiming, firing: this.firing, reloadPressed: this.reloadPressed, pickupPressed: this.pickupPressed, slotPressed: this.slotPressed, medkitPressed: this.medkitPressed, lookX: mobileYaw, lookY: mobilePitch };
     const moveDebug = document.getElementById("move-input-debug");
     if (moveDebug) moveDebug.textContent = `Move Input: X: ${this.moveX.toFixed(2)} Y: ${this.moveY.toFixed(2)}`;
     this.lookX = 0;
     this.lookY = 0;
     this.reloadPressed = false;
+    this.pickupPressed = false;
+    this.slotPressed = null;
+    this.medkitPressed = false;
     return snapshot;
   }
 
   isActive() {
-    return this.movementPointerId !== null || this.cameraPointerId !== null || Math.abs(this.moveX) > 0.01 || Math.abs(this.moveY) > 0.01 || this.jump || this.crouch || this.sprint || this.aiming || this.firing || this.reloadPressed;
+    return this.movementPointerId !== null || this.cameraPointerId !== null || Math.abs(this.moveX) > 0.01 || Math.abs(this.moveY) > 0.01 || this.jump || this.crouch || this.sprint || this.aiming || this.firing || this.reloadPressed || this.pickupPressed || this.slotPressed !== null || this.medkitPressed;
   }
 
   dispose() {
@@ -146,6 +155,9 @@ export class TouchInputManager {
     this.aiming = false;
     this.firing = false;
     this.reloadPressed = false;
+    this.pickupPressed = false;
+    this.slotPressed = null;
+    this.medkitPressed = false;
   }
 
   private resetMovement() {

@@ -15,6 +15,9 @@ export class HudController {
     setText("shield-value", Math.ceil(snapshot.shield).toString());
     setText("ammo-value", snapshot.ammo.toString());
     setText("reserve-value", snapshot.reserve.toString());
+    setText("weapon-name", snapshot.weaponName ?? "NO WEAPON");
+    setText("medkit-value", `MED KIT ×${snapshot.medkits ?? 0}`);
+    snapshot.slots?.forEach((slot, index) => setText(`slot-${index + 1}`, slot ? slot.toUpperCase() : "EMPTY"));
     setText("elims-value", snapshot.elims.toString());
     setText("remaining-count", snapshot.remaining.toString());
     setText("storm-timer", snapshot.zone);

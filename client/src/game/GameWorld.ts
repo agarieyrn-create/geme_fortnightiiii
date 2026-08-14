@@ -34,6 +34,9 @@ const PLAYER_MAX_HP = 300;
 const ENEMY_MAX_HP = 100;
 const PLAYER_WEAPON_RANGE = 500;
 const PLAYER_WEAPON_DAMAGE = 25;
+const PICKUP_RANGE = 3.2;
+const MEDKIT_HEAL = 50;
+const MEDKIT_USE_TIME = 3;
 const ENEMY_ATTACK_RANGE = 25;
 const ENEMY_ATTACK_DAMAGE = 10;
 const ENEMY_ATTACK_INTERVAL = 1.15;
@@ -48,7 +51,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "full"; avatarId: string; onResult: (outcome: MatchOutcome) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "full"; avatarId: string; onResult: (outcome: MatchOutcome) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -60,7 +63,11 @@ type Projectile = {
 
 type Pickup = {
   root: TransformNode;
-  type: "ammo" | "shield" | "med";
+  type: "weapon" | "ammo" | "shield" | "med";
+  weaponId?: import("./contracts").WeaponId;
+  ammoType?: "medium" | "light" | "shells";
+  label: string;
+  amount?: number;
   collected: boolean;
 };
 
@@ -232,6 +239,10 @@ class Combatant {
 
   containsPoint(point: Vector3) {
     return this.alive && this.collider.intersectsPoint(point);
+  }
+
+  setWeaponVisible(visible: boolean) {
+    this.weaponMount?.setEnabled(visible);
   }
 
   applyLoadout(loadoutId: string) {
@@ -495,6 +506,9 @@ export class GameWorld {
   private currentAiming = false;
   private currentCrouching = false;
   private debugGodMode = false;
+  private medkits = 0;
+  private medkitTimer = 0;
+  private nearbyPickup?: Pickup;
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
@@ -525,11 +539,11 @@ export class GameWorld {
     });
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout(options.avatarId);
-    this.player.hp = options.step === "step3" ? PLAYER_MAX_HP : 100;
-    this.player.shield = options.step === "step3" ? 0 : 65;
-    if (options.step === "full" || options.step === "step3") {
+    this.player.hp = options.step === "step3" || options.step === "step4" ? PLAYER_MAX_HP : 100;
+    this.player.shield = options.step === "step3" || options.step === "step4" ? 0 : 65;
+    if (options.step === "full" || options.step === "step3" || options.step === "step4") {
       this.createRivals();
-      if (options.step === "full") {
+      if (options.step === "full" || options.step === "step4") {
         this.createPickups();
         this.stormRing = this.createStormRing();
         this.stormCore = this.createStormCore();
@@ -544,6 +558,12 @@ export class GameWorld {
     scene.activeCamera = this.camera;
     this.cameraController = new CameraController(this.camera, this.obstacles);
     this.weaponSystem = new WeaponSystem();
+    if (options.step === "step3" || options.step === "full") {
+      this.weaponSystem.equip("assault", 120);
+      this.player.setWeaponVisible(true);
+    } else {
+      this.player.setWeaponVisible(false);
+    }
     this.playerController = new PlayerController(this.player, this.cameraController, this.weaponSystem);
     this.updateCamera(0);
     this.updateHud(true);
@@ -567,10 +587,10 @@ export class GameWorld {
       this.elapsed += delta;
       if (this.options.step === "full") this.updateStorm(delta);
       this.updatePlayer(delta);
-      if (this.options.step === "full" || this.options.step === "step3") {
+      if (this.options.step === "full" || this.options.step === "step3" || this.options.step === "step4") {
         this.enemyDirector.update(delta, this);
         this.updateProjectiles(delta);
-        if (this.options.step === "full") this.updatePickups(delta);
+        if (this.options.step === "full" || this.options.step === "step4") this.updatePickups(delta);
         this.checkEndState();
       } else if (this.options.step === "step2") {
         this.updateProjectiles(delta);
@@ -586,15 +606,18 @@ export class GameWorld {
 
   private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3) {
     const direction = cameraDirection.normalize();
-    const ray = new Ray(this.camera.position, direction, PLAYER_WEAPON_RANGE);
+    const definition = this.weaponSystem.definition();
+    const range = definition?.range ?? PLAYER_WEAPON_RANGE;
+    const damage = definition?.damage ?? PLAYER_WEAPON_DAMAGE;
+    const ray = new Ray(this.camera.position, direction, range);
     const pick = this.scene.pickWithRay(ray, (mesh) => Boolean(mesh.metadata?.trainingTargetId || mesh.metadata?.enemyId));
-    const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(direction.scale(PLAYER_WEAPON_RANGE));
+    const aimPoint = pick?.hit && pick.pickedPoint ? pick.pickedPoint.clone() : this.camera.position.add(direction.scale(range));
     const enemyId = pick?.pickedMesh?.metadata?.enemyId as string | undefined;
     const target = enemyId ? this.rivals.find((rival) => rival.id === enemyId && rival.alive) : undefined;
     if (target) {
-      const eliminated = target.applyDamage(PLAYER_WEAPON_DAMAGE);
+      const eliminated = target.applyDamage(damage);
       this.showHitMarker();
-      this.pushEvent(`-${PLAYER_WEAPON_DAMAGE} HP`);
+      this.pushEvent(`-${damage} HP`);
       this.createImpact(aimPoint, eliminated);
       if (eliminated) {
         this.elims += 1;
@@ -994,29 +1017,46 @@ export class GameWorld {
   }
 
   private createPickups() {
-    const placements: Array<[number, number, Pickup["type"]]> = [[-4, 23, "ammo"], [16, -4, "shield"], [-31, -23, "med"], [34, 32, "ammo"], [-49, 4, "shield"], [8, -52, "ammo"]];
-    placements.forEach(([x, z, type], index) => {
-      const root = new TransformNode(`supply-${index}`, this.scene);
-      root.position.set(x, 0.8, z);
-      const crate = MeshBuilder.CreateBox(`supply-crate-${index}`, { width: 0.9, height: 0.56, depth: 0.9 }, this.scene);
-      crate.parent = root;
-      const crateMat = new StandardMaterial(`supply-mat-${index}`, this.scene);
-      crateMat.diffuseColor = new Color3(0.15, 0.12, 0.09);
-      crateMat.emissiveColor = AMBER.scale(0.13);
-      crate.material = crateMat;
-      const signal = MeshBuilder.CreateSphere(`supply-signal-${index}`, { diameter: 0.38, segments: 8 }, this.scene);
-      signal.parent = root;
-      signal.position.y = 0.68;
-      const signalMat = new StandardMaterial(`supply-glow-${index}`, this.scene);
-      signalMat.emissiveColor = type === "shield" ? TEAL : AMBER;
-      signalMat.disableLighting = true;
-      signal.material = signalMat;
-      const ring = MeshBuilder.CreateTorus(`supply-ring-${index}`, { diameter: 1.35, thickness: 0.022, tessellation: 20 }, this.scene);
+    const placements: Array<[number, number, Pickup["type"], string, import("./contracts").WeaponId | undefined, "medium" | "light" | "shells" | undefined, number | undefined]> = [
+      [-4, 23, "weapon", "ASSAULT RIFLE", "assault", undefined, undefined],
+      [16, -4, "weapon", "SHOTGUN", "shotgun", undefined, undefined],
+      [-31, -23, "weapon", "SMG", "smg", undefined, undefined],
+      [34, 32, "ammo", "MEDIUM AMMO", undefined, "medium", 30],
+      [-49, 4, "ammo", "LIGHT AMMO", undefined, "light", 30],
+      [8, -52, "ammo", "SHELLS", undefined, "shells", 12],
+      [23, -31, "med", "MED KIT", undefined, undefined, 1],
+    ];
+    placements.forEach(([x, z, type, label, weaponId, ammoType, amount], index) => {
+      const root = new TransformNode(`pickup-${index}`, this.scene);
+      root.position.set(x, 0.75, z);
+      const base = MeshBuilder.CreateBox(`pickup-base-${index}`, { width: 0.88, height: 0.42, depth: 0.62 }, this.scene);
+      base.parent = root;
+      const material = new StandardMaterial(`pickup-material-${index}`, this.scene);
+      material.diffuseColor = type === "weapon" ? (weaponId === "shotgun" ? AMBER : weaponId === "smg" ? TEAL : new Color3(0.38, 0.68, 0.9)) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
+      material.emissiveColor = material.diffuseColor.scale(0.3);
+      base.material = material;
+      if (type === "weapon") {
+        const barrel = MeshBuilder.CreateCylinder(`pickup-barrel-${index}`, { height: 0.82, diameter: 0.08, tessellation: 8 }, this.scene);
+        barrel.parent = root;
+        barrel.rotation.z = Math.PI / 2;
+        barrel.position.x = 0.38;
+        barrel.material = material;
+      } else if (type === "med") {
+        const cross = MeshBuilder.CreateBox(`pickup-cross-${index}`, { width: 0.12, height: 0.5, depth: 0.08 }, this.scene);
+        cross.parent = root;
+        cross.position.y = 0.25;
+        cross.material = material;
+      } else {
+        const signal = MeshBuilder.CreateSphere(`pickup-signal-${index}`, { diameter: 0.3, segments: 8 }, this.scene);
+        signal.parent = root;
+        signal.position.y = 0.36;
+        signal.material = material;
+      }
+      const ring = MeshBuilder.CreateTorus(`pickup-ring-${index}`, { diameter: 1.25, thickness: 0.024, tessellation: 20 }, this.scene);
       ring.parent = root;
       ring.rotation.x = Math.PI / 2;
-      ring.position.y = 0.52;
-      ring.material = signalMat;
-      this.pickups.push({ root, type, collected: false });
+      ring.material = material;
+      this.pickups.push({ root, type, weaponId, ammoType, label, amount, collected: false });
     });
   }
 
@@ -1069,7 +1109,14 @@ export class GameWorld {
       return;
     }
     const rawSnapshot = this.options.demo ? this.demoInput() : this.touchInput.isActive() ? this.touchInput.snapshot() : this.input.snapshot();
-    const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : rawSnapshot;
+    if (this.options.step === "step4") {
+      if (rawSnapshot.slotPressed) this.switchWeapon(rawSnapshot.slotPressed);
+      if (rawSnapshot.pickupPressed) this.pickupNearest();
+      if (rawSnapshot.medkitPressed) this.beginMedkit();
+    }
+    this.medkitTimer = Math.max(0, this.medkitTimer - delta);
+    const usingMedkit = this.medkitTimer > 0;
+    const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : usingMedkit ? { ...rawSnapshot, forward: 0, right: 0, sprint: false, aiming: false, firing: false, jump: false } : rawSnapshot;
     this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.fireAtAimPoint(origin, direction), (message) => this.pushEvent(message));
     this.currentAiming = this.playerController.aiming;
     this.currentCrouching = this.playerController.crouching;
@@ -1190,26 +1237,80 @@ export class GameWorld {
     }
   }
 
+  private switchWeapon(slot: number) {
+    const id = (["assault", "smg", "shotgun"] as const)[slot - 1];
+    if (!id || !this.weaponSystem.has(id)) {
+      this.pushEvent(`SLOT ${slot}: 未取得`);
+      return;
+    }
+    this.weaponSystem.equip(id);
+    this.player.setWeaponVisible(true);
+    this.announcement = `${this.weaponSystem.definition()?.name ?? id} 装備`;
+    this.pushEvent(this.announcement);
+  }
+
+  private pickupNearest() {
+    const pickup = this.nearbyPickup;
+    if (!pickup || pickup.collected) {
+      this.pushEvent("拾得範囲にアイテムなし");
+      return;
+    }
+    pickup.collected = true;
+    pickup.root.setEnabled(false);
+    if (pickup.type === "weapon" && pickup.weaponId) {
+      this.weaponSystem.equip(pickup.weaponId, 90);
+      this.player.setWeaponVisible(true);
+      this.announcement = `${pickup.label} を取得`;
+    } else if (pickup.type === "ammo" && pickup.ammoType) {
+      this.weaponSystem.addReserve(pickup.amount ?? 30, pickup.ammoType);
+      this.announcement = `${pickup.label} +${pickup.amount ?? 30}`;
+    } else if (pickup.type === "med") {
+      this.medkits = Math.min(3, this.medkits + 1);
+      this.announcement = `MED KIT ×${this.medkits}`;
+    } else {
+      this.player.shield = Math.min(100, this.player.shield + 28);
+      this.announcement = "シールド +28";
+    }
+    this.pushEvent(this.announcement);
+    this.nearbyPickup = undefined;
+  }
+
+  private beginMedkit() {
+    if (this.medkits <= 0 || this.medkitTimer > 0 || this.player.hp >= PLAYER_MAX_HP) {
+      this.pushEvent(this.medkits <= 0 ? "MED KITなし" : "HPは最大です");
+      return;
+    }
+    this.medkits -= 1;
+    this.medkitTimer = MEDKIT_USE_TIME;
+    this.announcement = "MED KIT 使用中…";
+    this.pushEvent("MED KIT 使用開始");
+    window.setTimeout(() => {
+      if (this.medkitTimer <= 0 && this.player.alive) {
+        this.player.hp = Math.min(PLAYER_MAX_HP, this.player.hp + MEDKIT_HEAL);
+        this.pushEvent(`+${MEDKIT_HEAL} HP`);
+      }
+    }, MEDKIT_USE_TIME * 1000);
+  }
+
   private updatePickups(delta: number) {
+    let nearest: Pickup | undefined;
+    let nearestDistance = PICKUP_RANGE * PICKUP_RANGE;
     this.pickups.forEach((pickup) => {
       if (pickup.collected) return;
-      pickup.root.position.y = 0.82 + Math.sin(this.elapsed * 2.6 + pickup.root.position.x) * 0.12;
+      pickup.root.position.y = 0.78 + Math.sin(this.elapsed * 2.6 + pickup.root.position.x) * 0.12;
       pickup.root.rotation.y += delta * 0.8;
-      if (Vector3.DistanceSquared(this.player.root.position, pickup.root.position) < 5.2) {
-        pickup.collected = true;
-        pickup.root.setEnabled(false);
-        if (pickup.type === "ammo") {
-          this.weaponSystem.addReserve(24);
-          this.pushEvent("補給物資：パルス弾薬 +24");
-        } else if (pickup.type === "shield") {
-          this.player.shield = Math.min(100, this.player.shield + 28);
-          this.pushEvent("補給物資：シールド +28");
-        } else {
-          this.player.hp = Math.min(100, this.player.hp + 34);
-          this.pushEvent("補給物資：フィールドメッド +34");
-        }
+      const distance = Vector3.DistanceSquared(this.player.root.position, pickup.root.position);
+      if (distance <= nearestDistance) {
+        nearest = pickup;
+        nearestDistance = distance;
       }
     });
+    this.nearbyPickup = nearest;
+    const pickupButton = document.querySelector<HTMLButtonElement>('[data-touch-action="pickup"]');
+    if (pickupButton) pickupButton.disabled = !nearest;
+    const medkitButton = document.querySelector<HTMLButtonElement>('[data-touch-action="medkit"]');
+    if (medkitButton) medkitButton.disabled = this.medkits <= 0 || this.medkitTimer > 0;
+    this.announcement = nearest ? `PICK UP  ·  ${nearest.label}` : (this.medkitTimer > 0 ? "MED KIT 使用中…" : "探索して装備を整える");
   }
 
   private updateCamera(delta: number) {
@@ -1277,14 +1378,14 @@ export class GameWorld {
       this.yaw = Math.PI;
     }
     this.cameraController.setYaw(this.yaw);
-    return { forward: 0, right: 0, jump: false, sprint: false, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, lookX: 0, lookY: 0 };
+    return { forward: 0, right: 0, jump: false, sprint: false, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, pickupPressed: false, slotPressed: null, medkitPressed: false, lookX: 0, lookY: 0 };
   }
 
   private updateHud(_force = false) {
-    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
-      maxHp: this.options.step === "step3" ? PLAYER_MAX_HP : 100,
+      maxHp: this.options.step === "step3" || this.options.step === "step4" ? PLAYER_MAX_HP : 100,
       shield: this.player.shield,
       ammo: this.weaponSystem.state.magazine,
       reserve: this.weaponSystem.state.reserve,
@@ -1295,6 +1396,9 @@ export class GameWorld {
       aiming: this.playerController.aiming,
       crouching: this.playerController.crouching,
       pickup: this.announcement,
+      weaponName: this.weaponSystem.definition()?.name ?? "NO WEAPON",
+      slots: this.weaponSystem.slots(),
+      medkits: this.medkits,
     }, this.player.root.position, this.stormRadius);
   }
 
