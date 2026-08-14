@@ -1,3 +1,5 @@
+export type TutorialKey = "move" | "look" | "aimFire" | "pickup" | "jump" | "caveSwitch";
+
 export type ProgressionData = {
   coins: number;
   clears: number;
@@ -13,6 +15,7 @@ export type ProgressionData = {
   reloadLevel: number;
   sfxVolume: number;
   bgmVolume: number;
+  tutorialSeen: Record<TutorialKey, boolean>;
 };
 
 export const DEFAULT_PROGRESSION: ProgressionData = {
@@ -30,6 +33,7 @@ export const DEFAULT_PROGRESSION: ProgressionData = {
   reloadLevel: 1,
   sfxVolume: 0.7,
   bgmVolume: 0.5,
+  tutorialSeen: { move: false, look: false, aimFire: false, pickup: false, jump: false, caveSwitch: false },
 };
 
 const STORAGE_KEY = "stormfall-progression-v1";
@@ -47,6 +51,18 @@ export function loadProgression(): ProgressionData {
 
 export function saveProgression(data: ProgressionData) {
   if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+export function markTutorialSeen(data: ProgressionData, key: TutorialKey) {
+  if (data.tutorialSeen[key]) return data;
+  const next = { ...data, tutorialSeen: { ...data.tutorialSeen, [key]: true } };
+  saveProgression(next);
+  return next;
+}
+
+export function resetProgression() {
+  if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
+  return { ...DEFAULT_PROGRESSION, tutorialSeen: { ...DEFAULT_PROGRESSION.tutorialSeen } };
 }
 
 export function upgradeCost(level: number) {

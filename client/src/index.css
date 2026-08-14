@@ -309,6 +309,16 @@ button { font: inherit; }
 .upgrade-card small:last-child { color: #ffe28a; font-weight: 800; }
 .result-stats { gap: 12px; }
 .result-stats span:last-child b { color: #ffd36a; }
+.tutorial-toast { position: fixed; z-index: 30; top: 55%; left: 50%; max-width: min(86vw, 360px); padding: 11px 16px; border: 1px solid rgba(255,211,106,.92); background: rgba(9,22,32,.94); color: #fff1bd; font: 800 15px/1.45 "Noto Sans JP", sans-serif; text-align: center; box-shadow: 0 0 24px rgba(246,182,73,.25); transform: translate(-50%, -50%); pointer-events: none; }
+.tutorial-focus { animation: tutorial-pulse 1s ease-in-out infinite; }
+.touch-actions .tutorial-focus, .touch-stick.tutorial-focus { border-color: #ffe47b !important; box-shadow: 0 0 0 3px rgba(255,218,106,.22), 0 0 20px rgba(255,203,78,.72) !important; }
+@keyframes tutorial-pulse { 50% { filter: brightness(1.45); } }
+.save-reset-button { align-self: start; margin-top: 8px; padding: 7px 10px; border: 1px dashed rgba(255,174,154,.6); background: rgba(76,20,24,.42); color: #ffcec4; font: 10px "Noto Sans JP", sans-serif; cursor: pointer; }
+.reset-confirm { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(0,7,15,.74); }
+.reset-confirm > div { width: min(360px, 92vw); padding: 22px; border: 1px solid rgba(255,205,178,.65); background: #0a1824; color: #efffff; box-shadow: 0 18px 48px rgba(0,0,0,.55); text-align: center; }
+.reset-confirm p { margin: 0 0 8px; color: #ffe5bf; font: 800 18px "Noto Sans JP", sans-serif; }.reset-confirm small { color: #b7cbd1; line-height: 1.6; }.reset-confirm > div > div { display: flex; justify-content: center; gap: 9px; margin-top: 18px; }.reset-confirm button { min-width: 104px; padding: 10px; border: 1px solid #13d9c4; background: #0e4350; color: #efffff; font: 800 13px "Noto Sans JP", sans-serif; }.reset-confirm button:first-child { border-color: #ffba9c; background: #7a332d; }
+.playtest-debug { position: fixed; top: 104px; left: 14px; z-index: 35; max-width: 230px; padding: 7px 9px; border: 1px dashed rgba(255,211,106,.55); background: rgba(2,12,22,.8); color: #ffe4a5; font: 10px/1.55 "Chakra Petch", "Noto Sans JP", sans-serif; white-space: pre-line; pointer-events: none; }
+@media (max-width: 767px), (pointer: coarse) { .tutorial-toast { top: 44%; font-size: 14px; }.playtest-debug { top: 78px; left: 12px; transform: scale(.9); transform-origin: top left; } }
 .hub-screen { position: relative; display: block; padding: 0; background-position: center; }
 .hub-screen::after { position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse at 72% 54%, transparent 0 32%, rgba(0,7,20,.28) 62%, rgba(0,6,16,.88) 100%); content: ""; pointer-events: none; }
 .hub-card { position: absolute; top: clamp(20px, 5vh, 62px); left: clamp(16px, 5vw, 72px); width: min(350px, 38vw); min-height: 0; padding: 19px 22px 21px; border-color: rgba(19,217,196,.45); background: linear-gradient(90deg, rgba(2,13,27,.9), rgba(2,13,27,.45)); box-shadow: inset 2px 0 #13d9c4, 0 18px 42px rgba(0,0,0,.24); backdrop-filter: blur(4px); }

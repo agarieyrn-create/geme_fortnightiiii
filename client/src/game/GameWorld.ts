@@ -24,7 +24,7 @@ import { AnimationController } from "./AnimationController";
 import { HumanoidModelController } from "./HumanoidModelController";
 import { EnemyDirector } from "./EnemyDirector";
 import { WorldBuilder } from "./WorldBuilder";
-import type { ProgressionData } from "./Progression";
+import type { ProgressionData, TutorialKey } from "./Progression";
 import { DUNGEON_CONFIGS, type DungeonId } from "./DungeonConfig";
 
 const TEAL = new Color3(0.075, 0.85, 0.77);
@@ -57,7 +57,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 
 export type MatchOutcome = "victory" | "defeat";
 export type DungeonSummary = { dungeonId: DungeonId; baseReward: number; bonusReward: number };
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; dungeonId: DungeonId; avatarId: string; progression: ProgressionData; onResult: (outcome: MatchOutcome, summary?: DungeonSummary) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "step4" | "step5" | "full"; dungeonId: DungeonId; avatarId: string; progression: ProgressionData; debug: boolean; onTutorial: (key: TutorialKey, text: string, target: "move" | "look" | "aim" | "fire" | "pickup" | "jump") => void; onResult: (outcome: MatchOutcome, summary?: DungeonSummary) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -600,6 +600,7 @@ export class GameWorld {
   private caveBossRockMarker?: Mesh;
   private caveBossFallingCooldown = 5.2;
   private caveBossPhaseTwo = false;
+  private tutorialSent = new Set<TutorialKey>();
 
   private get isForestDungeon() {
     return this.options.step === "step5" && this.options.dungeonId === "forest";
@@ -739,6 +740,12 @@ export class GameWorld {
 
   private playerMaxHp() {
     return PLAYER_MAX_HP + Math.max(0, this.progression.hpLevel - 1) * 20;
+  }
+
+  private showTutorial(key: TutorialKey, text: string, target: "move" | "look" | "aim" | "fire" | "pickup" | "jump") {
+    if (this.options.progression.tutorialSeen[key] || this.tutorialSent.has(key)) return;
+    this.tutorialSent.add(key);
+    this.options.onTutorial(key, text, target);
   }
 
   private applyDamageToRival(target: Rival, amount: number, attackerPosition: Vector3) {
@@ -1218,7 +1225,7 @@ export class GameWorld {
     this.playDungeonCue("key");
     if (this.caveSwitchesOn < 2) {
       this.dungeonObjective = "スイッチを2つさがそう！ あと1つ！";
-      this.announcement = "スイッチを1つ作動！ あと1つ！";
+      this.announcement = "できた！ あと1つ！";
     } else {
       this.dungeonObjective = "扉がひらいた！ 先へ進もう！";
       this.announcement = "扉がひらいた！";
@@ -1236,6 +1243,7 @@ export class GameWorld {
       if (nextSwitch) this.activateCaveSwitch(nextSwitch);
     }
     this.nearbyCaveSwitch = this.caveSwitches.find((switchNode) => !switchNode.active && Vector3.DistanceSquared(this.player.root.position, switchNode.position) < PICKUP_RANGE * PICKUP_RANGE);
+    if (this.nearbyCaveSwitch) this.showTutorial("caveSwitch", "スイッチに近づいて『おす』！", "pickup");
     this.caveFloorTraps.forEach((trap) => {
       trap.cooldown = Math.max(0, trap.cooldown - delta);
       const material = trap.mesh.material as StandardMaterial | null;
@@ -2038,6 +2046,12 @@ export class GameWorld {
       return;
     }
     const rawSnapshot = this.options.demo ? this.demoInput() : this.touchInput.isActive() ? this.touchInput.snapshot() : this.input.snapshot();
+    if (this.options.dungeonId === "ruins") {
+      if (!this.tutorialSent.has("move")) this.showTutorial("move", "左を動かして進もう！", "move");
+      else if (!this.tutorialSent.has("look") && (Math.abs(rawSnapshot.forward) > 0.08 || Math.abs(rawSnapshot.right) > 0.08)) this.showTutorial("look", "右側を動かして周りを見よう！", "look");
+      else if (!this.tutorialSent.has("aimFire") && this.tutorialSent.has("look") && this.rivals.some((rival) => rival.alive && Vector3.DistanceSquared(rival.root.position, this.player.root.position) < 900)) this.showTutorial("aimFire", "ねらって、うってみよう！", "fire");
+      else if (!this.tutorialSent.has("jump") && this.dungeonArea >= 2) this.showTutorial("jump", "ジャンプしてみよう！", "jump");
+    }
     if (this.options.step === "step4" || this.options.step === "step5") {
       if (rawSnapshot.slotPressed) this.switchWeapon(rawSnapshot.slotPressed);
       if (rawSnapshot.pickupPressed && this.isCaveDungeon && this.nearbyCaveSwitch) this.activateCaveSwitch(this.nearbyCaveSwitch);
@@ -2252,6 +2266,7 @@ export class GameWorld {
       }
     });
     this.nearbyPickup = nearest;
+    if (nearest && !this.isCaveDungeon) this.showTutorial("pickup", "近づくと自動でひろうよ！", "move");
     const medkitButton = document.querySelector<HTMLButtonElement>('[data-touch-action="medkit"]');
     if (medkitButton) medkitButton.disabled = this.medkits <= 0 || this.medkitTimer > 0;
     if (nearest) {
@@ -2372,6 +2387,10 @@ export class GameWorld {
       slots: this.weaponSystem.slots(),
       medkits: this.medkits,
     }, this.player.root.position, this.stormRadius);
+    if (this.options.debug) {
+      const debug = document.getElementById("playtest-debug");
+      if (debug) debug.textContent = `DEBUG PLAYTEST\nダンジョン: ${this.isCaveDungeon ? "くらやみの洞窟" : this.isForestDungeon ? "まよいの森" : "はじまりの遺跡"}\nエリア: ${this.dungeonArea}\nHP: ${Math.ceil(this.player.hp)} / ${this.playerMaxHp()}\n武器: ${this.weaponSystem.definition()?.name ?? "武器なし"}\nコイン: ${this.progression.coins}\n強化: HP${this.progression.hpLevel} / 攻${this.progression.attackLevel} / 装${this.progression.reloadLevel}\nFPS: ${Math.round(this.scene.getEngine().getFps())}`;
+    }
   }
 
   pushEvent(message: string) {
