@@ -304,9 +304,26 @@ button { font: inherit; }
 .forest-dungeon b { margin-top: 8px; color: #7ff5b4; font-size: 12px; }
 .forest-dungeon:disabled { opacity: .58; cursor: not-allowed; }
 .forest-boss-panel { background-size: cover; background-position: 88% 30%; }
+.cave-boss-panel { background-size: cover; background-position: 88% 36%; border-color: rgba(120, 105, 255, .55); }
+.cave-dungeon { border-color: rgba(116, 130, 255, .52); color: #e4e3ff; }
 .upgrade-card small:last-child { color: #ffe28a; font-weight: 800; }
 .result-stats { gap: 12px; }
 .result-stats span:last-child b { color: #ffd36a; }
+.hub-screen { position: relative; display: block; padding: 0; background-position: center; }
+.hub-screen::after { position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse at 72% 54%, transparent 0 32%, rgba(0,7,20,.28) 62%, rgba(0,6,16,.88) 100%); content: ""; pointer-events: none; }
+.hub-card { position: absolute; top: clamp(20px, 5vh, 62px); left: clamp(16px, 5vw, 72px); width: min(350px, 38vw); min-height: 0; padding: 19px 22px 21px; border-color: rgba(19,217,196,.45); background: linear-gradient(90deg, rgba(2,13,27,.9), rgba(2,13,27,.45)); box-shadow: inset 2px 0 #13d9c4, 0 18px 42px rgba(0,0,0,.24); backdrop-filter: blur(4px); }
+.hub-card .launch-logo { width: 54px; height: 54px; margin-bottom: 6px; }
+.hub-card .kicker { margin-bottom: 7px; font-size: 8px; }
+.hub-card h1 { margin: 7px 0 12px; font-family: "Chakra Petch", "Noto Sans JP", sans-serif; font-size: clamp(25px, 2.7vw, 38px); letter-spacing: .05em; text-transform: uppercase; }
+.hub-card .launch-copy { margin: 14px 0 15px; color: #b8d1da; font-size: 12px; line-height: 1.65; }
+.hub-menu { margin-top: 14px; gap: 7px; }.hub-menu button { min-height: 43px; background: rgba(5,31,43,.72); font-family: "Chakra Petch", "Noto Sans JP", sans-serif; font-size: 12px; letter-spacing: .13em; }
+.hub-world-signals { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.hub-world-signals span { position: absolute; right: 7vw; bottom: 8vh; color: rgba(163,243,233,.68); font: 700 10px "Chakra Petch", sans-serif; letter-spacing: .24em; }
+.hub-storm-arc { position: absolute; top: 13%; right: 12%; width: min(49vw, 680px); height: min(49vw, 680px); border: 2px solid rgba(19,217,196,.52); border-right-color: transparent; border-bottom-color: rgba(19,217,196,.14); border-radius: 50%; box-shadow: 0 0 40px rgba(19,217,196,.2), inset 0 0 60px rgba(19,217,196,.08); transform: rotate(-24deg); }
+.hub-nav-pylon { position: absolute; right: 30%; bottom: 18%; width: 6px; height: 34vh; background: linear-gradient(#102531, #1b5360 68%, #13d9c4); box-shadow: 0 0 15px rgba(19,217,196,.65); transform: skewX(-8deg); }
+.hub-supply-beacon { position: absolute; right: 19%; bottom: 14%; width: 11px; height: 11px; border-radius: 50%; background: #f6b649; box-shadow: 0 0 15px 5px rgba(246,182,73,.45); }
+.avatar-chooser { position: absolute; right: clamp(16px, 5vw, 72px); bottom: clamp(16px, 4vh, 44px); width: min(355px, 39vw); background: linear-gradient(145deg, rgba(3,18,31,.76), rgba(3,13,24,.32)); }
+@media (max-width: 767px), (pointer: coarse) { .hub-card { position: relative; top: auto; left: auto; width: calc(100% - 28px); margin: 20px 14px 0; padding: 17px; background: linear-gradient(90deg, rgba(2,13,27,.88), rgba(2,13,27,.48)); }.hub-card h1 { font-size: 28px; }.avatar-chooser { position: relative; right: auto; bottom: auto; width: calc(100% - 28px); margin: 18px 14px 28px; }.hub-world-signals span { right: 14px; bottom: 10px; font-size: 7px; }.hub-nav-pylon { right: 12%; height: 20vh; }.hub-storm-arc { top: 42%; right: -14%; width: 70vw; height: 70vw; } }
 @media (max-width: 767px), (pointer: coarse) {
   .hub-stats { gap: 5px 14px; }
   .upgrade-card { align-items: stretch; }

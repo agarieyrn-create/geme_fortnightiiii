@@ -11,6 +11,8 @@ const REFERENCE_URL = "/manus-storage/stormfall-reference_00af8a30.png";
 const BEACON_URL = "/manus-storage/stormfall-supply-beacon-fixed_fefc7346.png";
 const FOREST_REFERENCE_URL = "/manus-storage/mayoi-forest-reference_d98ef10a.png";
 const FOREST_GUARDIAN_URL = "/manus-storage/mayoi-guardian-reference_0099b23a.png";
+const CAVE_REFERENCE_URL = "/manus-storage/kurayami-cave-reference_652c556d.png";
+const GORUM_REFERENCE_URL = "/manus-storage/gorum-reference_88e81959.png";
 
 const AVATARS = [
   { id: "kairo", name: "KAIRO", role: "RIFT RANGER", image: "/manus-storage/stormfall-player-anchor_21f4d359.png" },
@@ -34,7 +36,9 @@ export default function GameCanvas() {
     typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
   const quickStart =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).has("play");
-  const selectedDungeon = (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dungeon") === "forest" ? "forest" : "ruins") as DungeonId;
+  const dungeonQuery = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("dungeon") : null;
+  const selectedDungeon = (dungeonQuery === "forest" || dungeonQuery === "cave" ? dungeonQuery : "ruins") as DungeonId;
+  const dungeonName = selectedDungeon === "cave" ? "くらやみの洞窟" : selectedDungeon === "forest" ? "まよいの森" : "はじまりの遺跡";
   const [started, setStarted] = useState(isDemo || quickStart);
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [progression, setProgression] = useState<ProgressionData>(() => loadProgression());
@@ -122,6 +126,7 @@ export default function GameCanvas() {
 
   const beginMatch = (dungeonId: DungeonId = "ruins") => {
     if (dungeonId === "forest" && !progression.forestUnlocked) return;
+    if (dungeonId === "cave" && !progression.caveUnlocked) return;
     handleRef.current?.start();
     void canvasRef.current?.requestPointerLock?.();
     setStarted(true);
@@ -166,13 +171,13 @@ export default function GameCanvas() {
           </div>
           <div className="storm-readout">
               <span className="eyebrow">たんけんモード</span>
-              <strong id="storm-timer">{selectedDungeon === "forest" ? "まよいの森" : "はじまりの遺跡"}</strong>
+              <strong id="storm-timer">{dungeonName}</strong>
               <small className="rig-status">3Dプレイヤー</small>
 
           </div>
           <div className="remaining-readout">
             <span className="eyebrow">ダンジョン</span>
-            <strong>{selectedDungeon === "forest" ? "まよいの森" : "はじまりの遺跡"}</strong>
+            <strong>{dungeonName}</strong>
           </div>
         </header>
 
@@ -188,7 +193,7 @@ export default function GameCanvas() {
         </aside>
 
         <section className="dungeon-objective" aria-live="polite"><span>いまの目標</span><strong id="dungeon-objective">敵を3体たおそう！</strong></section>
-        <section id="boss-panel" className={`boss-panel ${selectedDungeon === "forest" ? "forest-boss-panel" : ""}`} style={selectedDungeon === "forest" ? { backgroundImage: `linear-gradient(90deg, rgba(12,38,20,.96), rgba(12,38,20,.68)), url(${FOREST_GUARDIAN_URL})` } : undefined} aria-label="ボスのHP"><div><span id="boss-name">ボス</span><b id="boss-hp-value">0 / 0</b></div><div className="boss-meter"><i id="boss-hp-fill" /></div></section>
+        <section id="boss-panel" className={`boss-panel ${selectedDungeon === "forest" ? "forest-boss-panel" : selectedDungeon === "cave" ? "cave-boss-panel" : ""}`} style={selectedDungeon === "forest" ? { backgroundImage: `linear-gradient(90deg, rgba(12,38,20,.96), rgba(12,38,20,.68)), url(${FOREST_GUARDIAN_URL})` } : selectedDungeon === "cave" ? { backgroundImage: `linear-gradient(90deg, rgba(18,14,24,.96), rgba(18,14,24,.68)), url(${GORUM_REFERENCE_URL})` } : undefined} aria-label="ボスのHP"><div><span id="boss-name">ボス</span><b id="boss-hp-value">0 / 0</b></div><div className="boss-meter"><i id="boss-hp-fill" /></div></section>
         <section className="vitals-panel" aria-label="プレイヤー状態">
           <div className="vital-row"><span>HP</span><div className="meter"><i id="health-fill" /></div><b id="health-value">100</b></div>
           <div className="vital-row shield"><span>SH</span><div className="meter"><i id="shield-fill" /></div><b id="shield-value">50</b></div>
@@ -221,6 +226,7 @@ export default function GameCanvas() {
 
       {!started && (
         <section className="launch-screen hub-screen" style={{ backgroundImage: `linear-gradient(90deg, rgba(3,10,22,.97) 3%, rgba(3,10,22,.78) 43%, rgba(3,10,22,.3) 100%), url(${REFERENCE_URL})` }}>
+          <div className="hub-world-signals" aria-hidden="true"><i className="hub-storm-arc" /><i className="hub-nav-pylon" /><i className="hub-supply-beacon" /><span>STORM FRONT // RIFT-07</span></div>
           <div className="hub-card">
             <img className="launch-logo" src={LOGO_URL} alt="" />
             <p className="kicker">STORMFALL // 前線作戦端末</p>
@@ -228,11 +234,11 @@ export default function GameCanvas() {
             <div className="hub-stats"><div className="coin-readout">コイン　<strong>🪙 {progression.coins}</strong></div><div className="strength-readout">つよさ　<strong>{strength}</strong></div></div>
             {hubNotice && <p className="hub-notice">{hubNotice}</p>}
             {hubView === "home" && <>
-              <p className="launch-copy">現在地：嵐の外縁。次の作戦を選び、奥地へ降下しよう。</p>
-              {progression.nextDungeonDiscovered && <p className="hub-notice">新しい場所が見つかった！　🔒？？？</p>}
+              <p className="launch-copy">現在地：嵐の外縁 // 次の降下地点を指定せよ。</p>
+              {progression.iceMountainDiscovered ? <p className="hub-notice">新しい場所が見つかった！　🔒 こおりの山</p> : progression.caveUnlocked ? <p className="hub-notice">新しい場所が見つかった！　くらやみの洞窟</p> : null}
               <div className="hub-menu"><button type="button" onClick={() => setHubView("dungeons")}>ダンジョンへ</button><button type="button" onClick={() => setHubView("upgrade")}>強くする</button><button type="button" onClick={() => setHubView("loadout")}>そうび</button><button type="button" onClick={() => setHubView("settings")}>設定</button></div>
             </>}
-            {hubView === "dungeons" && <div className="hub-panel"><div className="power-compare">{strength >= 150 ? "楽にいけそう！" : strength >= 100 ? "ちょうどいい！" : "ちょっとむずかしいかも！"}</div><button className="dungeon-card" type="button" onClick={() => beginMatch("ruins")}><strong>はじまりの遺跡</strong><span>おすすめのつよさ　100</span><span>クリア報酬　🪙 50　／　初回　🪙 100</span><b>出発する</b></button><div className="locked-dungeons"><button type="button" className={`forest-dungeon ${progression.forestUnlocked ? "unlocked-dungeon" : ""}`} style={progression.forestUnlocked ? { backgroundImage: `linear-gradient(90deg, rgba(3,18,11,.93), rgba(3,18,11,.55)), url(${FOREST_REFERENCE_URL})` } : undefined} disabled={!progression.forestUnlocked} onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=forest`); window.location.reload(); }}><strong>{progression.forestUnlocked ? "まよいの森" : "🔒 まよいの森"}</strong><small>{progression.forestUnlocked ? "おすすめのつよさ　150　／　クリア報酬　🪙 100" : "はじまりの遺跡をクリアしよう！"}</small><b>{progression.forestUnlocked ? "出発する" : "まだ行けないよ"}</b></button><span>？？？</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
+            {hubView === "dungeons" && <div className="hub-panel"><div className="power-compare">{strength >= 200 ? "楽にいけそう！" : strength >= 150 ? "ちょうどいい！" : "ちょっとむずかしいかも！"}</div><button className="dungeon-card" type="button" onClick={() => beginMatch("ruins")}><strong>はじまりの遺跡</strong><span>おすすめのつよさ　100</span><span>クリア報酬　🪙 50　／　初回　🪙 100</span><b>出発する</b></button><div className="locked-dungeons"><button type="button" className={`forest-dungeon ${progression.forestUnlocked ? "unlocked-dungeon" : ""}`} style={progression.forestUnlocked ? { backgroundImage: `linear-gradient(90deg, rgba(3,18,11,.93), rgba(3,18,11,.55)), url(${FOREST_REFERENCE_URL})` } : undefined} disabled={!progression.forestUnlocked} onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=forest`); window.location.reload(); }}><strong>{progression.forestUnlocked ? "まよいの森" : "🔒 まよいの森"}</strong><small>{progression.forestUnlocked ? "おすすめのつよさ　150　／　クリア報酬　🪙 100" : "はじまりの遺跡をクリアしよう！"}</small><b>{progression.forestUnlocked ? "出発する" : "まだ行けないよ"}</b></button><button type="button" className={`forest-dungeon cave-dungeon ${progression.caveUnlocked ? "unlocked-dungeon" : ""}`} style={progression.caveUnlocked ? { backgroundImage: `linear-gradient(90deg, rgba(12,9,19,.94), rgba(12,9,19,.56)), url(${CAVE_REFERENCE_URL})` } : undefined} disabled={!progression.caveUnlocked} onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=cave`); window.location.reload(); }}><strong>{progression.caveUnlocked ? "くらやみの洞窟" : "🔒 くらやみの洞窟"}</strong><small>{progression.caveUnlocked ? "おすすめのつよさ　200　／　初回　🪙 200" : "まよいの森をクリアしよう！"}</small><b>{progression.caveUnlocked ? "出発する" : "まだ行けないよ"}</b></button><span>{progression.iceMountainDiscovered ? "🔒 こおりの山" : "？？？"}</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "upgrade" && <div className="hub-panel upgrade-list"><div className="strength-readout">今のつよさ　<strong>{strength}</strong></div>{([ ["hpLevel", "HPアップ", "もっと元気になる！"], ["attackLevel", "こうげき力アップ", "てきに大きなダメージ！"], ["reloadLevel", "リロードアップ", "もっと早くリロード！"] ] as const).map(([key, title, copy]) => { const next = Math.min(5, progression[key] + 1); const current = key === "hpLevel" ? `${playerStats.maxHp}` : key === "attackLevel" ? `${playerStats.damage.toFixed(1)}` : `${playerStats.reloadTime.toFixed(1)}秒`; const nextValue = key === "hpLevel" ? `${playerStats.maxHp + 20}` : key === "attackLevel" ? `${(playerStats.damage * 1.1).toFixed(1)}` : `${(playerStats.reloadTime * 0.9).toFixed(1)}秒`; return <div className="upgrade-card" key={key}><div><strong>{title}</strong><span>{copy}</span><small>Lv.{progression[key]} → Lv.{next}</small><small>{key === "hpLevel" ? "HP" : key === "attackLevel" ? "こうげき力" : "リロード時間"}　{current} → {nextValue}</small></div><button type="button" disabled={progression[key] >= 5 || progression.coins < upgradeCost(progression[key])} onClick={() => changeUpgrade(key)}>{progression[key] >= 5 ? "最大" : `${upgradeCost(progression[key])}コイン`}</button></div>})}<button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "loadout" && <div className="hub-panel"><p>今つかえる武器</p><div className="loadout-list"><span>アサルトライフル</span><span>サブマシンガン</span><span>ショットガン</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "settings" && <div className="hub-panel settings-panel"><label>効果音　<input type="range" min="0" max="1" step="0.1" value={progression.sfxVolume} onChange={(event) => updateVolume("sfxVolume", Number(event.target.value))} /></label><label>BGM　<input type="range" min="0" max="1" step="0.1" value={progression.bgmVolume} onChange={(event) => updateVolume("bgmVolume", Number(event.target.value))} /></label><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
@@ -244,10 +250,10 @@ export default function GameCanvas() {
       {outcome && (
         <section className="result-screen">
           <img src={LOGO_URL} alt="" />
-                      <p>{outcome === "victory" ? `${selectedDungeon === "forest" ? "まよいの森" : "ダンジョン"}クリア！` : "ゲームオーバー"}</p>
-            <h2>{outcome === "victory" ? `${selectedDungeon === "forest" ? "まよいの森" : "はじまりの遺跡"}をクリアしたよ` : "もう一度ちょうせんしよう"}</h2>
-            {outcome === "victory" && selectedDungeon === "forest" && <p className="hub-notice">新しい場所が見つかった！</p>}
-            <div className="result-stats"><span>たおした敵：<b id="result-elims">0</b>体</span><span>クリア時間：<b id="result-time">--:--</b></span><span>基本報酬：<b>{resultReward?.base ?? 0}</b></span>{selectedDungeon === "forest" && <span>宝箱：<b>{resultReward?.bonus ?? 0}</b></span>}<span>今回ゲット：<b id="result-coins">{resultReward ? `${resultReward.total}まい` : "報酬を計算中"}</b></span><span>もっているコイン：<b>{resultReward?.coinsAfter ?? progression.coins}</b></span></div>
+                      <p>{outcome === "victory" ? `${dungeonName}クリア！` : "ゲームオーバー"}</p>
+            <h2>{outcome === "victory" ? `${dungeonName}をクリアしたよ` : "もう一度ちょうせんしよう"}</h2>
+            {outcome === "victory" && selectedDungeon === "forest" && <p className="hub-notice">新しい場所が見つかった！　くらやみの洞窟</p>}{outcome === "victory" && selectedDungeon === "cave" && <p className="hub-notice">新しい場所が見つかった！　🔒 こおりの山</p>}
+            <div className="result-stats"><span>たおした敵：<b id="result-elims">0</b>体</span><span>クリア時間：<b id="result-time">--:--</b></span><span>基本報酬：<b>{resultReward?.base ?? 0}</b></span>{(selectedDungeon === "forest" || selectedDungeon === "cave") && <span>宝箱：<b>{resultReward?.bonus ?? 0}</b></span>}<span>今回ゲット：<b id="result-coins">{resultReward ? `${resultReward.total}まい` : "報酬を計算中"}</b></span><span>もっているコイン：<b>{resultReward?.coinsAfter ?? progression.coins}</b></span></div>
             <div className="result-actions"><button type="button" onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=${selectedDungeon}`); window.location.reload(); }}>もう一度</button><button type="button" onClick={() => { window.history.replaceState({}, "", window.location.pathname); window.location.reload(); }}>拠点へもどる</button></div>
 
         </section>

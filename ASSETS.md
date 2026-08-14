@@ -9,6 +9,8 @@
 | stormfall-reference | 肩越しカメラ、砂岩の渓谷、航法パイロン、収縮嵐、戦術HUDを含む完成画面の基準 | 1920×1080、フルスクリーン参照 | `/manus-storage/stormfall-reference_00af8a30.png` |
 | mayoi-forest-reference | 分岐する森道、巨木、苔岩、草、青緑の霧、隠し宝箱を含む「まよいの森」の視覚基準 | 16:9、ゲーム内環境参照 | `/manus-storage/mayoi-forest-reference_d98ef10a.png` |
 | mayoi-guardian-reference | 根・石・苔・ティールのコアを持つ森のガーディアンのシルエットと攻撃の視覚基準 | 3:4、ボス参照 | `/manus-storage/mayoi-guardian-reference_0099b23a.png` |
+| kurayami-cave-reference | 暗い玄武岩の洞窟、ティールの鉱石、琥珀のランプ、予告付き床トラップを含む「くらやみの洞窟」の視覚基準 | 16:9、ゲーム内環境参照 | `/manus-storage/kurayami-cave-reference_652c556d.png` |
+| gorum-reference | ティールの鉱石亀裂と琥珀コアを持つ「岩の王 ゴルム」のシルエットと攻撃の視覚基準 | 1:1、ボス参照 | `/manus-storage/gorum-reference_88e81959.png` |
 
 ## UI & Brand
 

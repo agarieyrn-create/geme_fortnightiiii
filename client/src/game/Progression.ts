@@ -4,6 +4,9 @@ export type ProgressionData = {
   ruinsCleared: boolean;
   forestUnlocked: boolean;
   forestClears: number;
+  caveUnlocked: boolean;
+  caveClears: number;
+  iceMountainDiscovered: boolean;
   nextDungeonDiscovered: boolean;
   hpLevel: number;
   attackLevel: number;
@@ -18,6 +21,9 @@ export const DEFAULT_PROGRESSION: ProgressionData = {
   ruinsCleared: false,
   forestUnlocked: false,
   forestClears: 0,
+  caveUnlocked: false,
+  caveClears: 0,
+  iceMountainDiscovered: false,
   nextDungeonDiscovered: false,
   hpLevel: 1,
   attackLevel: 1,
@@ -33,7 +39,7 @@ export function loadProgression(): ProgressionData {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<ProgressionData> | null;
     const data = { ...DEFAULT_PROGRESSION, ...(parsed ?? {}) };
-    return { ...data, ruinsCleared: Boolean(data.ruinsCleared || data.clears > 0), forestUnlocked: Boolean(data.forestUnlocked || data.clears > 0) };
+    return { ...data, ruinsCleared: Boolean(data.ruinsCleared || data.clears > 0), forestUnlocked: Boolean(data.forestUnlocked || data.clears > 0), caveUnlocked: Boolean(data.caveUnlocked || data.forestClears > 0) };
   } catch {
     return DEFAULT_PROGRESSION;
   }
@@ -68,12 +74,15 @@ export function getPlayerStats(data: ProgressionData) {
   };
 }
 
-export function dungeonReward(data: ProgressionData, dungeonId: "ruins" | "forest" = "ruins", bonusReward = 0) {
-  const baseReward = dungeonId === "forest" ? 100 : data.clears === 0 ? 100 : 50;
+export function dungeonReward(data: ProgressionData, dungeonId: "ruins" | "forest" | "cave" = "ruins", bonusReward = 0) {
+  const baseReward = dungeonId === "cave" ? data.caveClears === 0 ? 200 : 150 : dungeonId === "forest" ? 100 : data.clears === 0 ? 100 : 50;
   const reward = baseReward + bonusReward;
-  const next = dungeonId === "forest"
+  const next = dungeonId === "cave"
+    ? { ...data, coins: data.coins + reward, caveClears: data.caveClears + 1, iceMountainDiscovered: true }
+    : dungeonId === "forest"
     ? { ...data, coins: data.coins + reward, forestClears: data.forestClears + 1, nextDungeonDiscovered: true }
     : { ...data, coins: data.coins + reward, clears: data.clears + 1, ruinsCleared: true, forestUnlocked: true };
+  if (dungeonId === "forest") next.caveUnlocked = true;
   saveProgression(next);
   return { data: next, reward, baseReward, bonusReward };
 }

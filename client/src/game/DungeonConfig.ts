@@ -1,4 +1,4 @@
-export type DungeonId = "ruins" | "forest";
+export type DungeonId = "ruins" | "forest" | "cave";
 
 export type DungeonConfig = {
   id: DungeonId;
@@ -24,6 +24,14 @@ export const DUNGEON_CONFIGS: Record<DungeonId, DungeonConfig> = {
     recommendedStrength: 150,
     firstReward: 100,
     clearReward: 100,
+    unlockedByDefault: false,
+  },
+  cave: {
+    id: "cave",
+    name: "くらやみの洞窟",
+    recommendedStrength: 200,
+    firstReward: 200,
+    clearReward: 150,
     unlockedByDefault: false,
   },
 };

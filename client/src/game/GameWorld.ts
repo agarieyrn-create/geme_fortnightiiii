@@ -13,6 +13,7 @@ import { Scene } from "@babylonjs/core/scene";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
+import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { InputManager, type InputSnapshot } from "./InputManager";
 import { TouchInputManager } from "./TouchInputManager";
 import { CameraController } from "./CameraController";
@@ -75,6 +76,10 @@ type Pickup = {
   amount?: number;
   collected: boolean;
 };
+
+type CaveFloorTrap = { mesh: Mesh; position: Vector3; warning: number; cooldown: number; active: boolean };
+type CaveMover = { mesh: Mesh; origin: Vector3; phase: number; cooldown: number };
+type CaveSwitch = { root: TransformNode; position: Vector3; active: boolean };
 
 type TrainingTarget = {
   root: TransformNode;
@@ -362,7 +367,7 @@ class Combatant {
 
 class Rival extends Combatant {
   aiState: import("./contracts").EnemyState = "IDLE";
-  style: "normal" | "melee" | "ranged" | "forestBoss" = "normal";
+  style: "normal" | "melee" | "ranged" | "shield" | "forestBoss" | "caveBoss" = "normal";
   private fireCooldown = 0.65 + Math.random() * 0.35;
   attackDamage = ENEMY_ATTACK_DAMAGE;
   private stateTimer = 1.5 + Math.random() * 1.5;
@@ -382,7 +387,7 @@ class Rival extends Combatant {
     this.lastSeen.copyFrom(position);
   }
 
-  setStyle(style: "normal" | "melee" | "ranged" | "forestBoss") {
+  setStyle(style: "normal" | "melee" | "ranged" | "shield" | "forestBoss" | "caveBoss") {
     this.style = style;
     if (style === "melee") {
       this.attackDamage = 12;
@@ -396,6 +401,23 @@ class Rival extends Combatant {
       this.attackDamage = 15;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.82);
+    } else if (style === "shield") {
+      this.attackDamage = 9;
+      this.applyLoadout("anker");
+      this.root.scaling.setAll(1.16);
+      const shield = MeshBuilder.CreateDisc(`${this.id}-shield`, { radius: 0.9, tessellation: 24 }, this.scene);
+      shield.parent = this.root;
+      shield.position.set(0, 1.25, 0.72);
+      const shieldMat = new StandardMaterial(`${this.id}-shield-mat`, this.scene);
+      shieldMat.diffuseColor = TEAL;
+      shieldMat.emissiveColor = TEAL.scale(0.6);
+      shieldMat.alpha = 0.48;
+      shieldMat.disableLighting = true;
+      shield.material = shieldMat;
+    } else if (style === "caveBoss") {
+      this.attackDamage = 16;
+      this.applyLoadout("anker");
+      this.root.scaling.setAll(2.05);
     }
   }
 
@@ -453,7 +475,10 @@ class Rival extends Combatant {
       const attackRange = this.style === "melee" ? 4.2 : this.style === "ranged" ? 22 : ENEMY_ATTACK_RANGE;
       if (visible && distance <= attackRange && this.fireCooldown <= 0) {
         const direction = playerAim.subtract(eye).normalize();
-        if (this.style === "melee") {
+        if (this.style === "caveBoss") {
+          world.queueCaveRockThrow(player.root.position);
+          this.fireCooldown = 3.6;
+        } else if (this.style === "melee") {
           world.pushEvent("敵がとびこんでくる！");
           world.spawnProjectile(eye.add(direction.scale(0.45)), direction, "rival", this.attackDamage);
           this.fireCooldown = 1.45;
@@ -564,9 +589,24 @@ export class GameWorld {
   private forestBossDashCooldown = 5.5;
   private forestBossDashWarning = 0;
   private forestBossDashDirection = new Vector3();
+  private caveFloorTraps: CaveFloorTrap[] = [];
+  private caveMovers: CaveMover[] = [];
+  private caveSwitches: CaveSwitch[] = [];
+  private nearbyCaveSwitch?: CaveSwitch;
+  private caveSwitchesOn = 0;
+  private caveBossRockCooldown = 3.4;
+  private caveBossRockTimer = 0;
+  private caveBossRockPosition = new Vector3();
+  private caveBossRockMarker?: Mesh;
+  private caveBossFallingCooldown = 5.2;
+  private caveBossPhaseTwo = false;
 
   private get isForestDungeon() {
     return this.options.step === "step5" && this.options.dungeonId === "forest";
+  }
+
+  private get isCaveDungeon() {
+    return this.options.step === "step5" && this.options.dungeonId === "cave";
   }
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
@@ -580,17 +620,22 @@ export class GameWorld {
       scene.ambientColor = new Color3(0.12, 0.22, 0.15);
       scene.fogColor = new Color3(0.055, 0.16, 0.11);
       scene.fogDensity = canvas.clientWidth < 600 ? 0.006 : 0.011;
+    } else if (this.isCaveDungeon) {
+      scene.clearColor = new Color4(0.018, 0.014, 0.035, 1);
+      scene.ambientColor = new Color3(0.12, 0.11, 0.2);
+      scene.fogColor = new Color3(0.045, 0.035, 0.09);
+      scene.fogDensity = canvas.clientWidth < 600 ? 0.0055 : 0.01;
     }
-    new HemisphericLight("sky-hemisphere", new Vector3(0.15, 1, 0.1), scene).intensity = 0.88;
+    new HemisphericLight("sky-hemisphere", new Vector3(0.15, 1, 0.1), scene).intensity = this.isCaveDungeon ? 0.58 : 0.88;
     const sun = new DirectionalLight("low-sun", new Vector3(-0.36, -0.72, 0.38), scene);
     sun.position = new Vector3(42, 72, -35);
-    sun.intensity = 1.05;
+    sun.intensity = this.isCaveDungeon ? 0.38 : 1.05;
 
     this.terrainMaterial = new StandardMaterial("sandstone-terrain", scene);
-    this.terrainMaterial.diffuseColor = this.isForestDungeon ? new Color3(0.09, 0.26, 0.13) : SAND;
+    this.terrainMaterial.diffuseColor = this.isCaveDungeon ? new Color3(0.13, 0.095, 0.19) : this.isForestDungeon ? new Color3(0.09, 0.26, 0.13) : SAND;
     this.terrainMaterial.specularColor = new Color3(0.04, 0.035, 0.025);
     this.terrainMaterial.diffuseTexture = this.createTerrainTexture();
-    this.terrainMaterial.emissiveColor = this.isForestDungeon ? new Color3(0.005, 0.024, 0.01) : new Color3(0.006, 0.001, 0);
+    this.terrainMaterial.emissiveColor = this.isCaveDungeon ? new Color3(0.018, 0.008, 0.052) : this.isForestDungeon ? new Color3(0.005, 0.024, 0.01) : new Color3(0.006, 0.001, 0);
     this.buildEnvironment();
 
     this.input = new InputManager(canvas);
@@ -610,7 +655,8 @@ export class GameWorld {
     this.player.hp = options.step === "step3" || options.step === "step4" || options.step === "step5" ? this.playerMaxHp() : 100;
     this.player.shield = options.step === "step3" || options.step === "step4" || options.step === "step5" ? 0 : 65;
     if (options.step === "step5") {
-      if (this.isForestDungeon) this.createForestAreaOne();
+      if (this.isCaveDungeon) this.createCaveAreaOne();
+      else if (this.isForestDungeon) this.createForestAreaOne();
       else this.createDungeonAreaOne();
     } else if (options.step === "full" || options.step === "step3" || options.step === "step4") {
       this.createRivals();
@@ -647,9 +693,9 @@ export class GameWorld {
     if (this.mode !== "briefing") return;
     this.mode = "playing";
     this.dungeonStartedAt = performance.now();
-    this.announcement = this.options.step === "step5" ? (this.isForestDungeon ? "まよいの森　森のおくへ進もう！" : "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！") : "裂け目への降下を確認";
-    this.dungeonObjective = this.options.step === "step5" ? (this.isForestDungeon ? "森のおくへ進もう！" : "敵を3体たおそう！") : this.dungeonObjective;
-    this.pushEvent(this.options.step === "step5" ? (this.isForestDungeon ? "まよいの森へようこそ！" : "はじまりの遺跡へようこそ！") : "エリア RIFT-07 に着地");
+    this.announcement = this.options.step === "step5" ? (this.isCaveDungeon ? "くらやみの洞窟　明かりをたよりに進もう！" : this.isForestDungeon ? "まよいの森　森のおくへ進もう！" : "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！") : "裂け目への降下を確認";
+    this.dungeonObjective = this.options.step === "step5" ? (this.isCaveDungeon ? "洞窟のおくへ進もう！" : this.isForestDungeon ? "森のおくへ進もう！" : "敵を3体たおそう！") : this.dungeonObjective;
+    this.pushEvent(this.options.step === "step5" ? (this.isCaveDungeon ? "くらやみの洞窟へようこそ！" : this.isForestDungeon ? "まよいの森へようこそ！" : "はじまりの遺跡へようこそ！") : "エリア RIFT-07 に着地");
     if (this.options.step === "step5") this.playDungeonCue("spawn");
   }
 
@@ -675,6 +721,7 @@ export class GameWorld {
           this.updateDungeonDoors(delta);
           this.updateDungeonRoomTrigger();
           this.updateDungeonProgress(delta);
+          this.updateCaveGimmicks(delta);
           this.updateBossAttack(delta);
         }
         this.checkEndState();
@@ -694,6 +741,20 @@ export class GameWorld {
     return PLAYER_MAX_HP + Math.max(0, this.progression.hpLevel - 1) * 20;
   }
 
+  private applyDamageToRival(target: Rival, amount: number, attackerPosition: Vector3) {
+    let adjusted = amount;
+    if (target.style === "shield") {
+      const enemyForward = new Vector3(Math.sin(target.root.rotation.y), 0, Math.cos(target.root.rotation.y));
+      const fromEnemy = attackerPosition.subtract(target.root.position);
+      fromEnemy.y = 0;
+      if (fromEnemy.lengthSquared() > 0.01 && Vector3.Dot(enemyForward, fromEnemy.normalize()) > 0.18) {
+        adjusted = Math.max(1, Math.round(amount * 0.4));
+        this.pushEvent("シールドでダメージをへらされた！ 回りこんでみよう！");
+      }
+    }
+    return { eliminated: target.applyDamage(adjusted), amount: adjusted };
+  }
+
   private fireAtAimPoint(origin: Vector3, cameraDirection: Vector3, damageOverride?: number) {
     const direction = cameraDirection.normalize();
     const definition = this.weaponSystem.definition();
@@ -705,9 +766,10 @@ export class GameWorld {
     const enemyId = pick?.pickedMesh?.metadata?.enemyId as string | undefined;
     const target = enemyId ? this.rivals.find((rival) => rival.id === enemyId && rival.alive) : undefined;
     if (target) {
-      const eliminated = target.applyDamage(damage);
+      const hit = this.applyDamageToRival(target, damage, origin);
+      const eliminated = hit.eliminated;
       this.showHitMarker();
-      this.pushEvent(`-${damage} HP`);
+      this.pushEvent(`-${hit.amount} HP`);
       this.createImpact(aimPoint, eliminated);
       if (eliminated) {
         this.elims += 1;
@@ -756,8 +818,13 @@ export class GameWorld {
   }
 
   private updateBossAttack(delta: number) {
-    if (this.options.step !== "step5" || this.dungeonArea !== 5 || !this.boss?.alive) return;
+    const bossArea = this.isCaveDungeon ? 6 : 5;
+    if (this.options.step !== "step5" || this.dungeonArea !== bossArea || !this.boss?.alive) return;
     if (this.isForestDungeon) this.updateForestBossDash(delta);
+    if (this.isCaveDungeon) {
+      this.updateCaveBossAttacks(delta);
+      if (this.caveBossRockTimer > 0) return;
+    }
     if (this.bossWarningTimer > 0) {
       this.bossWarningTimer = Math.max(0, this.bossWarningTimer - delta);
       if (this.bossWarning) {
@@ -792,9 +859,64 @@ export class GameWorld {
       material.disableLighting = true;
       this.bossWarning.material = material;
       this.bossWarningTimer = 1.25;
-      this.announcement = "気をつけて！ 赤い場所からにげよう！";
-      this.pushEvent("ボスの範囲攻撃！");
+      this.announcement = this.isCaveDungeon ? "ゴルムが地面をたたく！ はなれよう！" : "気をつけて！ 赤い場所からにげよう！";
+      this.pushEvent(this.isCaveDungeon ? "地面攻撃のよこく！" : "ボスの範囲攻撃！");
       this.playDungeonCue("warning");
+    }
+  }
+
+  queueCaveRockThrow(position: Vector3, falling = false) {
+    if (!this.isCaveDungeon || !this.boss?.alive || this.caveBossRockTimer > 0) return;
+    this.caveBossRockPosition.copyFrom(position);
+    this.caveBossRockMarker = MeshBuilder.CreateDisc(`cave-rock-warning-${falling ? "fall" : "throw"}`, { radius: falling ? 2.3 : 1.75, tessellation: 28 }, this.scene);
+    this.caveBossRockMarker.position.copyFrom(position);
+    this.caveBossRockMarker.position.y = 0.045;
+    this.caveBossRockMarker.rotation.x = Math.PI / 2;
+    const material = new StandardMaterial("cave-rock-warning-mat", this.scene);
+    material.diffuseColor = falling ? new Color3(0.8, 0.18, 0.08) : AMBER;
+    material.emissiveColor = falling ? new Color3(0.62, 0.04, 0.02) : AMBER.scale(0.48);
+    material.alpha = 0.55;
+    material.disableLighting = true;
+    this.caveBossRockMarker.material = material;
+    this.caveBossRockTimer = falling ? 1.25 : 1.05;
+    this.announcement = falling ? "天井から岩が落ちる！ にげよう！" : "岩が飛んでくる！ 横へにげよう！";
+    this.pushEvent(this.announcement);
+    this.playDungeonCue("warning");
+  }
+
+  private updateCaveBossAttacks(delta: number) {
+    if (!this.boss?.alive) return;
+    if (!this.caveBossPhaseTwo && this.boss.hp <= this.boss.maxHp * 0.5) {
+      this.caveBossPhaseTwo = true;
+      this.announcement = "ゴルムが怒った！";
+      this.pushEvent("新しい攻撃に気をつけよう！");
+      this.playDungeonCue("boss");
+    }
+    if (this.caveBossRockTimer > 0) {
+      this.caveBossRockTimer = Math.max(0, this.caveBossRockTimer - delta);
+      if (this.caveBossRockMarker) this.caveBossRockMarker.scaling.setAll(1 + Math.sin(this.elapsed * 20) * 0.07);
+      if (this.caveBossRockTimer === 0) {
+        this.caveBossRockMarker?.dispose();
+        this.caveBossRockMarker = undefined;
+        const hit = Vector3.DistanceSquared(this.player.root.position, this.caveBossRockPosition) < 6.4;
+        if (hit && this.player.alive) {
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(this.caveBossPhaseTwo ? 18 : 14);
+          this.showPlayerDamage(this.caveBossRockPosition);
+          this.pushEvent(this.debugGodMode ? "岩をよけた！" : "岩の攻撃を受けた！");
+          if (eliminated) this.pushEvent("PLAYER DEAD");
+        }
+        this.playDungeonCue("impact");
+      }
+      return;
+    }
+    this.caveBossRockCooldown -= delta;
+    this.caveBossFallingCooldown -= delta;
+    if (this.caveBossPhaseTwo && this.caveBossFallingCooldown <= 0) {
+      this.queueCaveRockThrow(this.player.root.position, true);
+      this.caveBossFallingCooldown = 5.4;
+    } else if (this.caveBossRockCooldown <= 0) {
+      this.queueCaveRockThrow(this.player.root.position);
+      this.caveBossRockCooldown = 3.8;
     }
   }
 
@@ -929,6 +1051,10 @@ export class GameWorld {
   }
 
   private buildEnvironment() {
+    if (this.isCaveDungeon) {
+      this.buildCaveEnvironment();
+      return;
+    }
     if (this.isForestDungeon) {
       this.buildForestEnvironment();
       return;
@@ -965,6 +1091,191 @@ export class GameWorld {
     this.createHills();
     this.createTrees();
     this.createBuildings();
+  }
+
+  private buildCaveEnvironment() {
+    const ground = MeshBuilder.CreateGround("cave-ground", { width: 28, height: 154, subdivisions: 20 }, this.scene);
+    ground.material = this.terrainMaterial;
+    const basaltMat = new StandardMaterial("cave-basalt-mat", this.scene);
+    basaltMat.diffuseColor = new Color3(0.13, 0.1, 0.19);
+    basaltMat.emissiveColor = new Color3(0.012, 0.008, 0.028);
+    basaltMat.specularColor = Color3.Black();
+    const crystalMat = new StandardMaterial("cave-crystal-mat", this.scene);
+    crystalMat.diffuseColor = new Color3(0.04, 0.5, 0.6);
+    crystalMat.emissiveColor = new Color3(0.015, 0.58, 0.68);
+    const lampMat = new StandardMaterial("cave-lamp-mat", this.scene);
+    lampMat.emissiveColor = AMBER;
+    lampMat.disableLighting = true;
+    for (let z = 34, index = 0; z > -102; z -= 10, index += 1) {
+      [-12.5, 12.5].forEach((x, side) => {
+        const wall = MeshBuilder.CreateIcoSphere(`cave-wall-${index}-${side}`, { radius: 4.4 + (index % 2) * 0.8, subdivisions: 1 }, this.scene);
+        wall.position.set(x, 2.5, z + (side ? 1.8 : -1.8));
+        wall.scaling.set(1.15, 1.5, 1.05);
+        wall.material = basaltMat;
+        this.obstacles.push({ position: new Vector3(x, 0, z + (side ? 1.8 : -1.8)), radius: 3.2 });
+      });
+      if (index % 2 === 0) {
+        const torch = MeshBuilder.CreateCylinder(`cave-torch-${index}`, { height: 2.6, diameter: 0.18, tessellation: 8 }, this.scene);
+        torch.position.set(index % 4 === 0 ? -8.5 : 8.5, 1.3, z);
+        torch.material = lampMat;
+        const light = new PointLight(`cave-torch-light-${index}`, torch.position.add(new Vector3(0, 1.1, 0)), this.scene);
+        light.diffuse = new Color3(1, 0.45, 0.14);
+        light.intensity = 2.35;
+        light.range = 14;
+      } else {
+        const crystal = MeshBuilder.CreateCylinder(`cave-crystal-${index}`, { height: 2.3, diameterTop: 0.12, diameterBottom: 0.65, tessellation: 5 }, this.scene);
+        crystal.position.set(index % 3 === 0 ? -8 : 8, 1.15, z);
+        crystal.rotation.z = index % 3 === 0 ? -0.25 : 0.22;
+        crystal.material = crystalMat;
+      }
+    }
+    const playerLight = new PointLight("cave-player-light", new Vector3(0, 2.8, 34), this.scene);
+    playerLight.diffuse = new Color3(0.18, 0.78, 0.9);
+    playerLight.intensity = 2.4;
+    playerLight.range = 18;
+    this.scene.onBeforeRenderObservable.add(() => playerLight.position.copyFrom(this.player.root.position.add(new Vector3(0, 2.8, 0))));
+    [[-8.5, 21], [8.5, -52]].forEach(([x, z], index) => {
+      const pylon = MeshBuilder.CreateCylinder(`cave-nav-pylon-${index}`, { height: 5.4, diameterTop: 0.2, diameterBottom: 0.52, tessellation: 6 }, this.scene);
+      pylon.position.set(x, 2.7, z);
+      const pylonMat = new StandardMaterial(`cave-nav-pylon-mat-${index}`, this.scene);
+      pylonMat.diffuseColor = new Color3(0.035, 0.09, 0.13);
+      pylonMat.emissiveColor = TEAL.scale(0.32);
+      pylon.material = pylonMat;
+      const signal = MeshBuilder.CreateSphere(`cave-nav-signal-${index}`, { diameter: 0.54, segments: 10 }, this.scene);
+      signal.position.set(x, 5.55, z);
+      const signalMat = new StandardMaterial(`cave-nav-signal-mat-${index}`, this.scene);
+      signalMat.emissiveColor = TEAL;
+      signalMat.disableLighting = true;
+      signal.material = signalMat;
+      const beacon = MeshBuilder.CreateCylinder(`cave-supply-beacon-${index}`, { height: 1.15, diameter: 0.28, tessellation: 8 }, this.scene);
+      beacon.position.set(x * -0.62, 0.58, z - 2.4);
+      const beaconMat = new StandardMaterial(`cave-supply-beacon-mat-${index}`, this.scene);
+      beaconMat.emissiveColor = AMBER;
+      beaconMat.disableLighting = true;
+      beacon.material = beaconMat;
+    });
+  }
+
+  private createCaveAreaOne() {
+    this.createDungeonDoor(16);
+    this.createDungeonDoor(-10);
+    this.createDungeonDoor(-42);
+    this.createDungeonDoor(-74);
+    this.createCaveFloorTrap(new Vector3(-2.4, 0.06, 7), 0);
+    this.createCaveFloorTrap(new Vector3(2.8, 0.06, -1), 1);
+    this.createCaveMover(new Vector3(0, 1.2, 0), 0);
+    this.createCaveSwitch(new Vector3(-6, 0, -3), 0);
+    this.createCaveSwitch(new Vector3(6, 0, -7), 1);
+    this.dungeonObjective = "洞窟のおくへ進もう！";
+    this.dungeonWaveActive = false;
+  }
+
+  private createCaveFloorTrap(position: Vector3, index: number) {
+    const mesh = MeshBuilder.CreateBox(`cave-floor-trap-${index}`, { width: 3.2, height: 0.1, depth: 3.2 }, this.scene);
+    mesh.position.copyFrom(position);
+    const material = new StandardMaterial(`cave-floor-trap-mat-${index}`, this.scene);
+    material.diffuseColor = new Color3(0.18, 0.05, 0.06);
+    material.emissiveColor = new Color3(0.12, 0.01, 0.015);
+    mesh.material = material;
+    this.caveFloorTraps.push({ mesh, position: position.clone(), warning: 0, cooldown: 1.6, active: false });
+  }
+
+  private createCaveMover(origin: Vector3, index: number) {
+    const mesh = MeshBuilder.CreateBox(`cave-moving-rock-${index}`, { width: 2.8, height: 2.4, depth: 1.1 }, this.scene);
+    mesh.position.copyFrom(origin);
+    const material = new StandardMaterial(`cave-moving-rock-mat-${index}`, this.scene);
+    material.diffuseColor = new Color3(0.12, 0.09, 0.17);
+    material.emissiveColor = new Color3(0.01, 0.02, 0.06);
+    mesh.material = material;
+    this.caveMovers.push({ mesh, origin: origin.clone(), phase: index * 1.7, cooldown: 0 });
+  }
+
+  private createCaveSwitch(position: Vector3, index: number) {
+    const root = new TransformNode(`cave-switch-${index}`, this.scene);
+    root.position.copyFrom(position);
+    const base = MeshBuilder.CreateCylinder(`cave-switch-base-${index}`, { height: 1.25, diameter: 0.9, tessellation: 8 }, this.scene);
+    base.parent = root;
+    base.position.y = 0.62;
+    const material = new StandardMaterial(`cave-switch-mat-${index}`, this.scene);
+    material.diffuseColor = new Color3(0.07, 0.08, 0.14);
+    material.emissiveColor = new Color3(0.03, 0.2, 0.26);
+    base.material = material;
+    const lamp = MeshBuilder.CreateSphere(`cave-switch-lamp-${index}`, { diameter: 0.34, segments: 10 }, this.scene);
+    lamp.parent = root;
+    lamp.position.y = 1.38;
+    lamp.material = material;
+    this.caveSwitches.push({ root, position: position.clone(), active: false });
+  }
+
+  private activateCaveSwitch(switchNode: CaveSwitch) {
+    if (switchNode.active) return;
+    switchNode.active = true;
+    this.caveSwitchesOn += 1;
+    switchNode.root.getChildMeshes().forEach((mesh) => {
+      const material = mesh.material as StandardMaterial | null;
+      if (material) material.emissiveColor = AMBER;
+    });
+    this.playDungeonCue("key");
+    if (this.caveSwitchesOn < 2) {
+      this.dungeonObjective = "スイッチを2つさがそう！ あと1つ！";
+      this.announcement = "スイッチを1つ作動！ あと1つ！";
+    } else {
+      this.dungeonObjective = "扉がひらいた！ 先へ進もう！";
+      this.announcement = "扉がひらいた！";
+      this.openDungeonDoor(-10);
+      this.playDungeonCue("door");
+    }
+    this.pushEvent(this.announcement);
+    this.nearbyCaveSwitch = undefined;
+  }
+
+  private updateCaveGimmicks(delta: number) {
+    if (!this.isCaveDungeon) return;
+    if (this.options.demo && this.dungeonArea === 3 && this.caveSwitchesOn < 2) {
+      const nextSwitch = this.caveSwitches.find((switchNode) => !switchNode.active);
+      if (nextSwitch) this.activateCaveSwitch(nextSwitch);
+    }
+    this.nearbyCaveSwitch = this.caveSwitches.find((switchNode) => !switchNode.active && Vector3.DistanceSquared(this.player.root.position, switchNode.position) < PICKUP_RANGE * PICKUP_RANGE);
+    this.caveFloorTraps.forEach((trap) => {
+      trap.cooldown = Math.max(0, trap.cooldown - delta);
+      const material = trap.mesh.material as StandardMaterial | null;
+      const close = Vector3.DistanceSquared(this.player.root.position, trap.position) < 4.2;
+      if (!trap.active && trap.cooldown === 0 && close) {
+        trap.active = true;
+        trap.warning = 1;
+        if (material) material.emissiveColor = new Color3(0.85, 0.11, 0.035);
+        this.announcement = "危ない床が光っている！";
+        this.playDungeonCue("warning");
+      }
+      if (!trap.active) return;
+      trap.warning = Math.max(0, trap.warning - delta);
+      if (material) material.emissiveColor = new Color3(0.55 + Math.sin(this.elapsed * 18) * 0.25, 0.035, 0.02);
+      if (trap.warning === 0) {
+        const hit = Vector3.DistanceSquared(this.player.root.position, trap.position) < 4.2;
+        if (hit && this.player.alive) {
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(12);
+          this.showPlayerDamage(trap.position);
+          this.pushEvent(this.debugGodMode ? "床トラップをよけた！" : "床トラップ -12 HP");
+          if (eliminated) this.pushEvent("PLAYER DEAD");
+        }
+        if (material) material.emissiveColor = new Color3(0.12, 0.01, 0.015);
+        trap.active = false;
+        trap.cooldown = 3.2;
+      }
+    });
+    this.caveMovers.forEach((mover) => {
+      mover.phase += delta;
+      mover.cooldown = Math.max(0, mover.cooldown - delta);
+      mover.mesh.position.x = mover.origin.x + Math.sin(mover.phase * 1.35) * 6.3;
+      if (mover.cooldown === 0 && Vector3.DistanceSquared(this.player.root.position, mover.mesh.position) < 3.4) {
+        const eliminated = this.debugGodMode ? false : this.player.applyDamage(10);
+        this.showPlayerDamage(mover.mesh.position);
+        this.pushEvent(this.debugGodMode ? "動く岩をよけた！" : "動く岩 -10 HP");
+        this.playDungeonCue("impact");
+        mover.cooldown = 1.4;
+        if (eliminated) this.pushEvent("PLAYER DEAD");
+      }
+    });
   }
 
   private buildForestEnvironment() {
@@ -1032,6 +1343,29 @@ export class GameWorld {
       ringMat.disableLighting = true;
       ring.material = ringMat;
     });
+    this.createForestDirectionSign(new Vector3(-4.8, 0, 2.2), "← 安全な道\n回復があるよ");
+    this.createForestDirectionSign(new Vector3(4.8, 0, 2.2), "危険な道 →\n宝箱があるかも！");
+  }
+
+  private createForestDirectionSign(position: Vector3, label: string) {
+    const postMat = new StandardMaterial(`forest-sign-post-${position.x}`, this.scene);
+    postMat.diffuseColor = new Color3(0.16, 0.09, 0.04);
+    const post = MeshBuilder.CreateCylinder(`forest-sign-post-${position.x}`, { height: 2.1, diameter: 0.14, tessellation: 6 }, this.scene);
+    post.position.copyFrom(position);
+    post.position.y = 1.05;
+    post.material = postMat;
+    const board = MeshBuilder.CreatePlane(`forest-sign-board-${position.x}`, { width: 2.7, height: 1.05 }, this.scene);
+    board.position.copyFrom(position);
+    board.position.y = 2.05;
+    board.rotation.y = Math.PI;
+    const texture = new DynamicTexture(`forest-sign-text-${position.x}`, { width: 512, height: 192 }, this.scene, false);
+    texture.hasAlpha = true;
+    texture.drawText(label, 256, 74, "bold 35px sans-serif", "#d7fff4", "#102722", true, true);
+    const material = new StandardMaterial(`forest-sign-mat-${position.x}`, this.scene);
+    material.diffuseTexture = texture;
+    material.emissiveTexture = texture;
+    material.disableLighting = true;
+    board.material = material;
   }
 
   private createForestAreaOne() {
@@ -1356,6 +1690,10 @@ export class GameWorld {
 
   private updateDungeonProgress(delta: number) {
     if (this.options.step !== "step5") return;
+    if (this.isCaveDungeon) {
+      this.updateCaveProgress(delta);
+      return;
+    }
     if (this.isForestDungeon) {
       this.updateForestProgress(delta);
       return;
@@ -1418,6 +1756,77 @@ export class GameWorld {
       this.announcement = "ボスをたおした！ 宝箱をあけよう！";
       this.createDungeonPickup(new Vector3(0, 0.75, -78), "chest", "宝箱");
       this.pushEvent("ボスをたおした！");
+      this.playDungeonCue("clear");
+    }
+  }
+
+  private updateCaveProgress(delta: number) {
+    if (this.dungeonTransition > 0) {
+      this.dungeonTransition = Math.max(0, this.dungeonTransition - delta);
+      return;
+    }
+    const z = this.player.root.position.z;
+    const waveCleared = this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive);
+    if (this.dungeonArea === 1 && !this.dungeonWaveActive && z < 28) {
+      this.dungeonWaveActive = true;
+      this.dungeonObjective = "敵を3体たおそう！";
+      this.announcement = "洞窟の敵があらわれた！";
+      this.spawnDungeonWave([new Vector3(-4, 0, 22), new Vector3(4, 0, 18), new Vector3(0, 0, 13)], "cave-entry", ["melee", "ranged", "melee"]);
+      this.pushEvent("近づく敵と遠くの敵に気をつけよう！");
+      this.playDungeonCue("spawn");
+    } else if (this.dungeonArea === 1 && this.dungeonWaveActive && waveCleared) {
+      this.dungeonArea = 2;
+      this.dungeonWaveActive = false;
+      this.dungeonObjective = "光る床をよけよう！";
+      this.announcement = "クリア！ 光る床に気をつけよう！";
+      this.openDungeonDoor(16);
+      this.playDungeonCue("clear");
+    } else if (this.dungeonArea === 2 && z < 9) {
+      this.dungeonArea = 3;
+      this.dungeonObjective = "スイッチを2つさがそう！";
+      this.announcement = "スイッチを2つさがそう！";
+      this.pushEvent("近づいたら、おしてみよう！");
+      this.playDungeonCue("key");
+    } else if (this.dungeonArea === 3 && this.caveSwitchesOn >= 2) {
+      this.dungeonArea = 4;
+      this.dungeonWaveActive = false;
+      this.dungeonObjective = "強い敵をたおそう！";
+      this.dungeonTransition = 0.8;
+    } else if (this.dungeonArea === 4 && !this.dungeonWaveActive && z < -16) {
+      this.dungeonWaveActive = true;
+      this.spawnDungeonWave([new Vector3(-4, 0, -24), new Vector3(4, 0, -28), new Vector3(0, 0, -34)], "cave-strong", ["shield", "melee", "ranged"]);
+      this.announcement = "強い敵があらわれた！";
+      this.playDungeonCue("spawn");
+    } else if (this.dungeonArea === 4 && this.dungeonWaveActive && waveCleared) {
+      this.dungeonArea = 5;
+      this.dungeonObjective = "ボス前でじゅんびしよう！";
+      this.announcement = "クリア！ ボスへの道がひらいた！";
+      this.openDungeonDoor(-42);
+      this.createDungeonPickup(new Vector3(-3, 0.75, -55), "ammo", "弾薬", 100, "medium");
+      this.createDungeonPickup(new Vector3(3, 0.75, -55), "med", "回復キット", 2);
+      this.playDungeonCue("clear");
+    } else if (this.dungeonArea === 5 && z < -66) {
+      this.openDungeonDoor(-74);
+      if (z >= -74) return;
+      const boss = new Rival(this.scene, "gorum", new Vector3(0, 0, -86));
+      boss.setStyle("caveBoss");
+      boss.shield = 0;
+      boss.hp = 520;
+      boss.maxHp = 520;
+      this.rivals.push(boss);
+      this.boss = boss;
+      this.dungeonWave = [boss];
+      this.dungeonArea = 6;
+      this.dungeonObjective = "岩の王 ゴルムをたおそう！";
+      this.announcement = "岩の王 ゴルムがあらわれた！";
+      this.pushEvent("ボスがあらわれた！");
+      this.playDungeonCue("boss");
+    } else if (this.dungeonArea === 6 && this.boss && !this.boss.alive && !this.dungeonChest) {
+      this.dungeonArea = 7;
+      this.dungeonChest = true;
+      this.dungeonObjective = "宝箱をあけよう！";
+      this.announcement = "ゴルムをたおした！ 宝箱をあけよう！";
+      this.createDungeonPickup(new Vector3(0, 0.75, -86), "chest", "洞窟の宝箱");
       this.playDungeonCue("clear");
     }
   }
@@ -1509,7 +1918,7 @@ export class GameWorld {
 
   private updateDungeonRoomTrigger() {
     if (this.options.step !== "step5") return;
-    if (this.isForestDungeon) return;
+    if (this.isForestDungeon || this.isCaveDungeon) return;
     const z = this.player.root.position.z;
     if (this.dungeonArea === 2 && z < 2) {
       this.dungeonObjective = this.dungeonKey ? "次の部屋へ進もう！" : "カギを見つけよう！";
@@ -1631,7 +2040,8 @@ export class GameWorld {
     const rawSnapshot = this.options.demo ? this.demoInput() : this.touchInput.isActive() ? this.touchInput.snapshot() : this.input.snapshot();
     if (this.options.step === "step4" || this.options.step === "step5") {
       if (rawSnapshot.slotPressed) this.switchWeapon(rawSnapshot.slotPressed);
-      if (rawSnapshot.pickupPressed) this.pickupNearest();
+      if (rawSnapshot.pickupPressed && this.isCaveDungeon && this.nearbyCaveSwitch) this.activateCaveSwitch(this.nearbyCaveSwitch);
+      else if (rawSnapshot.pickupPressed) this.pickupNearest();
       if (rawSnapshot.medkitPressed) this.beginMedkit();
     }
     this.medkitTimer = Math.max(0, this.medkitTimer - delta);
@@ -1719,9 +2129,11 @@ export class GameWorld {
       if (projectile.owner === "player") {
         const target = this.rivals.find((rival) => rival.containsPoint(projectile.mesh.position));
         if (target) {
-          const eliminated = target.applyDamage(projectile.damage);
+          const attackerPosition = projectile.mesh.position.subtract(projectile.velocity.normalize().scale(0.8));
+          const hitResult = this.applyDamageToRival(target, projectile.damage, attackerPosition);
+          const eliminated = hitResult.eliminated;
           this.showHitMarker();
-          this.pushEvent(`-${projectile.damage} HP`);
+          this.pushEvent(`-${hitResult.amount} HP`);
           this.createImpact(projectile.mesh.position, eliminated);
           if (eliminated) {
             this.elims += 1;
@@ -1783,7 +2195,7 @@ export class GameWorld {
       this.dungeonObjective = "カギを手に入れた！ 次の部屋へ進もう！";
       this.announcement = "カギを手に入れた！";
     } else if (pickup.type === "chest") {
-      this.announcement = this.isForestDungeon ? "森の報酬を手に入れた！" : "コイン ×100　回復　弾薬";
+      this.announcement = this.isCaveDungeon ? "洞窟の宝箱をあけた！ コイン +50" : this.isForestDungeon ? "森の報酬を手に入れた！" : "コイン ×100　回復　弾薬";
       this.playDungeonCue("chest");
       this.pushEvent(this.announcement);
       this.finish("victory");
@@ -1913,7 +2325,7 @@ export class GameWorld {
     }
           if (outcome === "victory" && this.options.step === "step5") this.playDungeonCue("victory");
       const summary = outcome === "victory" && this.options.step === "step5"
-        ? { dungeonId: this.options.dungeonId, baseReward: DUNGEON_CONFIGS[this.options.dungeonId].clearReward, bonusReward: this.isForestDungeon && this.forestSecretFound ? 50 : 0 }
+        ? { dungeonId: this.options.dungeonId, baseReward: DUNGEON_CONFIGS[this.options.dungeonId].clearReward, bonusReward: this.isCaveDungeon ? 50 : this.isForestDungeon && this.forestSecretFound ? 50 : 0 }
         : undefined;
       this.options.onResult(outcome, summary);
 
@@ -1930,12 +2342,14 @@ export class GameWorld {
     }
     this.cameraController.setYaw(this.yaw);
     const forestAdvance = this.isForestDungeon && !rival && this.dungeonArea < 6;
+    const caveAdvance = this.isCaveDungeon && !rival && this.dungeonArea < 7;
+    const advancing = forestAdvance || caveAdvance;
     const forestLeftFork = forestAdvance && this.dungeonArea === 2 && !this.forestRoute;
-    return { forward: forestAdvance ? 1 : 0, right: forestLeftFork ? 0.55 : 0, jump: false, sprint: forestAdvance, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, pickupPressed: false, slotPressed: null, medkitPressed: false, lookX: 0, lookY: 0 };
+    return { forward: advancing ? 1 : 0, right: forestLeftFork ? 0.55 : 0, jump: false, sprint: advancing, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, pickupPressed: false, slotPressed: null, medkitPressed: false, lookX: 0, lookY: 0 };
   }
 
   private updateHud(_force = false) {
-    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `${this.isForestDungeon ? "森" : "遺跡"} エリア${Math.min(5, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `${this.isCaveDungeon ? "洞窟" : this.isForestDungeon ? "森" : "遺跡"} エリア${Math.min(this.isCaveDungeon ? 6 : 5, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
       maxHp: this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5" ? this.playerMaxHp() : 100,
@@ -1949,8 +2363,9 @@ export class GameWorld {
       aiming: this.playerController.aiming,
       crouching: this.playerController.crouching,
       pickup: this.announcement,
+      switchPrompt: this.isCaveDungeon && Boolean(this.nearbyCaveSwitch),
       objective: this.options.step === "step5" ? this.dungeonObjective : undefined,
-      bossName: this.isForestDungeon ? "森のガーディアン" : "ボス",
+      bossName: this.isCaveDungeon ? "岩の王 ゴルム" : this.isForestDungeon ? "森のガーディアン" : "ボス",
       bossHp: this.options.step === "step5" && this.boss?.alive ? this.boss.hp : undefined,
       bossMaxHp: this.options.step === "step5" && this.boss?.alive ? this.boss.maxHp : undefined,
       weaponName: this.weaponSystem.definition()?.name ?? "武器なし",
