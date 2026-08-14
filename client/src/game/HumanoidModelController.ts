@@ -8,6 +8,10 @@ import "@babylonjs/loaders/glTF";
 import type { MotionState } from "./contracts";
 
 const HUMANOID_URL = "/manus-storage/stormfall-robot_94040332.glb";
+// RobotExpressive's face/chest points along Babylon's +Z in this asset. Keep the
+// visual forward axis aligned with PlayerController's atan2(direction.x, direction.z)
+// convention; do not compensate by reversing movement vectors.
+const HUMANOID_LOCAL_YAW = 0;
 
 type ClipName = "Idle" | "Walk" | "Run" | "Jump";
 
@@ -33,7 +37,7 @@ export class HumanoidModelController {
       modelRoot.parent = this.anchor;
       modelRoot.position.y = 0;
       modelRoot.scaling.setAll(0.78);
-      modelRoot.rotation.y = Math.PI;
+      modelRoot.rotation.y = HUMANOID_LOCAL_YAW;
       result.meshes.forEach((mesh: AbstractMesh) => {
         if (mesh.parent === null) mesh.parent = modelRoot;
         mesh.isPickable = false;

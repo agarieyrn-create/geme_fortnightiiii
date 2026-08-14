@@ -11,3 +11,9 @@ GLB metadata: 74 nodes, 2 skins, 14 animation clips including `Idle`, `Jump`, `R
 ## RobotExpressive verification
 
 The current desktop capture shows the player as the actual RobotExpressive skinned GLB from the front after correcting its model-forward axis. It has volume, depth, separate limbs, torso, head, hands, and feet; the player path no longer creates a portrait plane or billboard. The mobile capture shows the same GLB geometry entering from the left edge along with the minimap, right swipe hint, and Jump/Crouch/Run controls. The HUD diagnostic remains `PLAYER RIG // GLB HUMANOID · SKELETON`.
+
+## Forward Axis correction verification
+
+The live path keeps `PlayerController` movement unchanged: camera forward remains `(sin(yaw), 0, cos(yaw))`, right remains `(forward.z, 0, -forward.x)`, and target yaw remains `atan2(direction.x, direction.z)` with shortest-angle interpolation. The correction is isolated to `HumanoidModelController`: `RobotExpressive.glb` now uses local yaw `0` instead of the previous `Math.PI` offset.
+
+The desktop demo screenshot shows `WALK_FORWARD` while the third-person camera is behind the robot, so the visible back is expected for a correctly forward-facing character; the model's backpack is on the camera-facing side while its movement direction is toward the scene center. The mobile demo shows the same GLB mesh and `WALK_FORWARD` state with the joystick and Jump/Crouch/Run controls still present. No map, UI, weapon, enemy, or movement-vector changes were made.
