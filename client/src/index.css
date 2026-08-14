@@ -123,3 +123,14 @@ button { font: inherit; }
 /* Game-state gate: controls stay mounted for the input adapter, but are invisible and untouchable outside active play. */
 .touch-controls.is-hidden { visibility: hidden; opacity: 0; pointer-events: none; }
 .touch-controls.is-playing { visibility: visible; opacity: 1; }
+
+/* STEP 3 damage feedback: brief red wash plus a directional cue without changing the HUD layout. */
+#hud.damage-flash::before { content: ""; position: fixed; inset: 0; z-index: 20; pointer-events: none; background: radial-gradient(circle at 50% 50%, transparent 42%, rgba(255, 45, 60, .38) 100%); animation: damage-flash .16s ease-out both; }
+#hud.damage-flash::after { content: "◈"; position: fixed; left: 50%; top: 50%; z-index: 21; transform: translate(-50%, -50%) rotate(var(--hit-direction, 0deg)); color: #ff5260; font-size: 1.4rem; text-shadow: 0 0 16px rgba(255, 45, 60, .85); pointer-events: none; animation: damage-direction .16s ease-out both; }
+@keyframes damage-flash { from { opacity: 1; } to { opacity: 0; } }
+@keyframes damage-direction { from { opacity: 1; scale: 1.2; } to { opacity: 0; scale: 1; } }
+
+@media (max-width: 720px) {
+  .result-screen { padding: 24px 18px; text-align: center; }
+  .result-screen h2 { max-width: 92vw; font-size: clamp(23px, 7vw, 36px); line-height: 1.25; }
+}

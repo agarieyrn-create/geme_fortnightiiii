@@ -58,3 +58,11 @@ CameraControllerはモバイル右画面ドラッグの`lookY`を既存経路の
 TouchInputManagerのモバイルsnapshotだけを調整し、`lookX`を負号反転して右スワイプで左を見る・左スワイプで右を見る操作へ変更した。`lookY`は2.05倍にして、親指1〜2回のスワイプで十分な上下角度を得られるようにした。CameraControllerのPitch制限は約-1.05〜+1.22ラジアン（約-60°〜+70°）を維持し、Pitchはカメラの注視点と位置だけへ適用してプレイヤー本体を傾けない。
 
 上スワイプは既存の符号を維持して上を見る、下スワイプは下を見る。斜めスワイプはYaw／Pitchを同時に更新する。InputManagerのPCマウス、WASD、左ジョイスティック、PlayerController、Aim、Fire、Raycastは変更していない。モバイルAIM中の画面、TypeScriptチェック、本番ビルドを確認済み。
+
+## STEP 3 — 敵AI基本戦闘
+
+STEP 3を起動モードに切り替え、敵を3体（RUSTJAW、VEIL、ANKER）だけ生成した。各敵は3Dメッシュ、非表示Collider、HP100、移動速度、攻撃能力、EnemyStateを持つ。状態はIDLE→PATROL→ALERT→CHASE→ATTACK、被撃破時DEADへ遷移する。距離44以内と簡易障害物視界判定で発見し、最後に見た位置を7秒追跡した後にPATROLへ戻る。障害物押し出しと敵同士の簡易分離を適用した。
+
+敵攻撃は射程25、15ダメージ、約0.72秒間隔。STEP 3ではプレイヤーシールドを0、HPを100として敵弾を実HPへ接続した。被弾時にHPバー減少、画面赤フラッシュ、Hit Directionマーカー、Camera反応を表示する。HP0でPLAYER DEAD、入力・移動・射撃停止、敵の攻撃対象解除、GAME OVER結果画面、RETRYを表示する。
+
+プレイヤーのDamage25は敵HP100へ接続し、4発でDEAD。死亡時は攻撃・移動・Colliderを停止し、敵モデルを倒れた姿勢で残す。撃破時にELIMSを1増加する。PC 1280x720とモバイル390x844のSTEP 3デモを確認し、敵表示、プレイヤーHP減少、HP／ELIMS HUD、既存Aim／Fire／Reload UI、PLAYER DEAD／RETRYを確認した。TypeScriptチェックと本番ビルドも成功。大量敵、ボス、アイテム、建築、ストーム、オンライン対戦は追加していない。

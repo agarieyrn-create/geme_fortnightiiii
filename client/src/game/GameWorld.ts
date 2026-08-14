@@ -40,7 +40,7 @@ const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: 
 };
 
 export type MatchOutcome = "victory" | "defeat";
-export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "full"; onResult: (outcome: MatchOutcome) => void };
+export type WorldOptions = { demo: boolean; step: "step1" | "step2" | "step3" | "full"; onResult: (outcome: MatchOutcome) => void };
 
 type Projectile = {
   mesh: Mesh;
@@ -203,7 +203,13 @@ class Combatant {
     this.flash = 0.24;
     if (this.hp <= 0) {
       this.alive = false;
-      this.root.setEnabled(false);
+      this.collider.setEnabled(false);
+      if (this.enemy) {
+        this.root.rotation.z = Math.PI / 2;
+        this.root.position.y = 0.35;
+      } else {
+        this.root.setEnabled(false);
+      }
     }
     return !this.alive;
   }
@@ -282,38 +288,114 @@ class Combatant {
 }
 
 class Rival extends Combatant {
-  private fireCooldown = 0.8 + Math.random();
-  private sway = Math.random() * Math.PI * 2;
+  aiState: import("./contracts").EnemyState = "IDLE";
+  private fireCooldown = 0.65 + Math.random() * 0.35;
+  private stateTimer = 1.5 + Math.random() * 1.5;
+  private lostTimer = 0;
+  private lastSeen = new Vector3();
+  private patrolIndex = 0;
+  private readonly patrolPoints: Vector3[];
 
   constructor(scene: Scene, id: string, position: Vector3) {
     super(scene, id, new Color3(0.28, 0.12, 0.1), position, true);
+    this.patrolPoints = [
+      position.clone(),
+      position.add(new Vector3(5.5, 0, 2.5)),
+      position.add(new Vector3(-3.5, 0, 6)),
+      position.add(new Vector3(-6, 0, -3)),
+    ];
+    this.lastSeen.copyFrom(position);
+  }
+
+  override applyDamage(amount: number) {
+    const eliminated = super.applyDamage(amount);
+    if (eliminated) {
+      this.aiState = "DEAD";
+      this.setMotionState("DEAD");
+    } else {
+      this.aiState = "ALERT";
+      this.lostTimer = 0;
+    }
+    return eliminated;
   }
 
   update(delta: number, world: GameWorld) {
     if (!this.alive) return;
-    this.fireCooldown -= delta;
     const player = world.player;
+    if (!player.alive) {
+      this.aiState = "PATROL";
+      this.patrol(delta, world);
+      this.updateVisual(delta);
+      return;
+    }
+    this.fireCooldown -= delta;
+    this.stateTimer -= delta;
+    const eye = this.root.position.add(new Vector3(0, 1.35, 0));
+    const playerAim = player.root.position.add(new Vector3(0, 1.05, 0));
     const toPlayer = player.root.position.subtract(this.root.position);
     const distance = toPlayer.length();
-    const outsideStorm = this.root.position.length() > world.stormRadius - 4;
-    const desired = outsideStorm
-      ? this.root.position.scale(-1).normalize()
-      : distance > 17
-        ? toPlayer.normalize()
-        : new Vector3(-toPlayer.z, 0, toPlayer.x).normalize().scale(Math.sin(world.elapsed * 1.7 + this.sway));
-    const speed = outsideStorm ? 8.4 : distance > 17 ? 5.1 : 3.1;
-    this.root.position.addInPlace(desired.scale(speed * delta));
+    const visible = distance <= 44 && world.hasLineOfSight(eye, playerAim);
+
+    if (visible) {
+      this.lastSeen.copyFrom(player.root.position);
+      this.lostTimer = 0;
+      if (this.aiState === "IDLE" || this.aiState === "PATROL") this.aiState = "ALERT";
+      if (this.aiState === "ALERT" && this.stateTimer <= 0) this.aiState = distance <= 24 ? "ATTACK" : "CHASE";
+      if (this.aiState === "CHASE" && distance <= 24) this.aiState = "ATTACK";
+      if (this.aiState === "ATTACK" && distance > 27) this.aiState = "CHASE";
+    } else {
+      this.lostTimer += delta;
+      if ((this.aiState === "CHASE" || this.aiState === "ATTACK" || this.aiState === "ALERT") && (this.lostTimer > 7 || distance > 68)) {
+        this.aiState = "PATROL";
+        this.stateTimer = 2;
+      }
+      if (this.aiState === "IDLE" && this.stateTimer <= 0) this.aiState = "PATROL";
+    }
+
+    if (this.aiState === "PATROL") this.patrol(delta, world);
+    if (this.aiState === "CHASE") this.moveToward(this.lastSeen, 4.5, delta, world);
+    if (this.aiState === "ALERT") this.faceToward(this.lastSeen);
+    if (this.aiState === "ATTACK") {
+      this.faceToward(player.root.position);
+      if (visible && distance <= 25 && this.fireCooldown <= 0) {
+        const direction = playerAim.subtract(eye).normalize();
+        world.spawnProjectile(eye.add(direction.scale(0.8)), direction, "rival", 15);
+        this.fireCooldown = 0.72;
+      }
+    }
+    this.setMotionState(this.aiState === "PATROL" || this.aiState === "CHASE" ? "WALK_FORWARD" : this.aiState);
     world.resolveObstacles(this.root.position, 0.72);
+    world.resolveEnemySeparation(this);
     this.root.position.x = Math.max(-104, Math.min(104, this.root.position.x));
     this.root.position.z = Math.max(-104, Math.min(104, this.root.position.z));
-    this.root.rotation.y = Math.atan2(desired.x, desired.z);
-    if (distance < 35 && this.fireCooldown <= 0 && player.alive) {
-      const direction = toPlayer.normalize();
-      world.spawnProjectile(this.root.position.add(new Vector3(0, 1.35, 0)).add(direction.scale(0.8)), direction, "rival", 13);
-      this.fireCooldown = 1.05 + Math.random() * 0.7;
-    }
-    if (this.root.position.length() > world.stormRadius) this.applyDamage(delta * 5.2);
     this.updateVisual(delta);
+  }
+
+  private patrol(delta: number, world: GameWorld) {
+    const point = this.patrolPoints[this.patrolIndex];
+    if (Vector3.DistanceSquared(this.root.position, point) < 1.5) {
+      this.patrolIndex = (this.patrolIndex + 1) % this.patrolPoints.length;
+      this.stateTimer = 1.2;
+    } else if (this.stateTimer <= 0) {
+      this.moveToward(point, 2.1, delta, world);
+    }
+    this.stateTimer -= delta;
+  }
+
+  private moveToward(target: Vector3, speed: number, delta: number, world: GameWorld) {
+    const direction = target.subtract(this.root.position);
+    direction.y = 0;
+    if (direction.lengthSquared() < 0.01) return;
+    const normalized = direction.normalize();
+    this.root.position.addInPlace(normalized.scale(speed * delta));
+    this.faceToward(target);
+    world.resolveObstacles(this.root.position, 0.72);
+  }
+
+  private faceToward(target: Vector3) {
+    const direction = target.subtract(this.root.position);
+    direction.y = 0;
+    if (direction.lengthSquared() > 0.01) this.root.rotation.y = Math.atan2(direction.x, direction.z);
   }
 }
 
@@ -379,12 +461,14 @@ export class GameWorld {
     this.touchInput = new TouchInputManager(canvas);
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
     this.player.applyLoadout("kairo");
-    this.player.shield = 65;
-    if (options.step === "full") {
+    this.player.shield = options.step === "step3" ? 0 : 65;
+    if (options.step === "full" || options.step === "step3") {
       this.createRivals();
-      this.createPickups();
-      this.stormRing = this.createStormRing();
-      this.stormCore = this.createStormCore();
+      if (options.step === "full") {
+        this.createPickups();
+        this.stormRing = this.createStormRing();
+        this.stormCore = this.createStormCore();
+      }
     } else if (options.step === "step2") {
       this.createTrainingTargets();
     }
@@ -418,10 +502,10 @@ export class GameWorld {
       this.elapsed += delta;
       if (this.options.step === "full") this.updateStorm(delta);
       this.updatePlayer(delta);
-      if (this.options.step === "full") {
+      if (this.options.step === "full" || this.options.step === "step3") {
         this.enemyDirector.update(delta, this);
         this.updateProjectiles(delta);
-        this.updatePickups(delta);
+        if (this.options.step === "full") this.updatePickups(delta);
         this.checkEndState();
       } else if (this.options.step === "step2") {
         this.updateProjectiles(delta);
@@ -508,6 +592,28 @@ export class GameWorld {
         const push = (distance < 0.001 ? new Vector3(1, 0, 0) : delta.normalize()).scale(minDistance - distance);
         position.addInPlace(push);
       }
+    });
+  }
+
+  hasLineOfSight(from: Vector3, to: Vector3) {
+    const segment = to.subtract(from);
+    const horizontal = new Vector3(segment.x, 0, segment.z);
+    const lengthSquared = Math.max(0.001, horizontal.lengthSquared());
+    return !this.obstacles.some((obstacle) => {
+      const offset = new Vector3(obstacle.position.x - from.x, 0, obstacle.position.z - from.z);
+      const t = Math.max(0, Math.min(1, Vector3.Dot(offset, horizontal) / lengthSquared));
+      const closest = new Vector3(from.x, 0, from.z).add(horizontal.scale(t));
+      return Vector3.DistanceSquared(closest, new Vector3(obstacle.position.x, 0, obstacle.position.z)) < (obstacle.radius + 0.5) ** 2;
+    });
+  }
+
+  resolveEnemySeparation(enemy: Rival) {
+    this.rivals.forEach((other) => {
+      if (other === enemy || !other.alive) return;
+      const delta = enemy.root.position.subtract(other.root.position);
+      delta.y = 0;
+      const distance = delta.length();
+      if (distance > 0 && distance < 1.45) enemy.root.position.addInPlace(delta.normalize().scale((1.45 - distance) * 0.5));
     });
   }
 
@@ -798,11 +904,15 @@ export class GameWorld {
   }
 
   private createRivals() {
-    [new Vector3(-26, 0, 18), new Vector3(29, 0, 10), new Vector3(-10, 0, -34), new Vector3(37, 0, -39)].forEach((position, index) => {
+    const placements = this.options.step === "step3"
+      ? [new Vector3(-26, 0, 18), new Vector3(29, 0, 10), new Vector3(-10, 0, -34)]
+      : [new Vector3(-26, 0, 18), new Vector3(29, 0, 10), new Vector3(-10, 0, -34), new Vector3(37, 0, -39)];
+    placements.forEach((position, index) => {
       const rival = new Rival(this.scene, `rival-${index + 1}`, position);
       const loadout = ["rustjaw", "veil", "anker", "rustjaw"][index];
       rival.applyLoadout(loadout);
-      rival.shield = 35 + index * 4;
+      rival.shield = this.options.step === "step3" ? 0 : 35 + index * 4;
+      rival.hp = 100;
       this.rivals.push(rival);
     });
   }
@@ -875,6 +985,11 @@ export class GameWorld {
   }
 
   private updatePlayer(delta: number) {
+    if (!this.player.alive) {
+      this.currentAiming = false;
+      this.currentCrouching = false;
+      return;
+    }
     const rawSnapshot = this.options.demo ? this.demoInput() : this.touchInput.isActive() ? this.touchInput.snapshot() : this.input.snapshot();
     const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : rawSnapshot;
     this.playerController.update(delta, snapshot, this.obstacles, (position, clearance) => this.resolveObstacles(position, clearance), (origin, direction) => this.fireAtAimPoint(origin, direction), (message) => this.pushEvent(message));
@@ -984,7 +1099,8 @@ export class GameWorld {
         }
       } else if (this.player.alive && Vector3.DistanceSquared(projectile.mesh.position, this.player.root.position.add(new Vector3(0, 1, 0))) < 1.45) {
         const eliminated = this.player.applyDamage(projectile.damage);
-        if (eliminated) this.pushEvent("ライバルのパルスを受けた");
+        this.showPlayerDamage(projectile.mesh.position);
+        if (eliminated) this.pushEvent("PLAYER DEAD");
         hit = true;
       }
       if (hit || projectile.life <= 0) {
@@ -1049,7 +1165,19 @@ export class GameWorld {
 
   private checkEndState() {
     if (!this.player.alive) this.finish("defeat");
-    else if (this.rivals.every((rival) => !rival.alive)) this.finish("victory");
+    else if (this.rivals.length > 0 && this.rivals.every((rival) => !rival.alive)) this.finish("victory");
+  }
+
+  private showPlayerDamage(hitPosition: Vector3) {
+    const hud = document.getElementById("hud");
+    const direction = hitPosition.subtract(this.player.root.position);
+    const angle = Math.atan2(direction.x, direction.z) * 180 / Math.PI;
+    if (hud) {
+      hud.classList.add("damage-flash");
+      hud.style.setProperty("--hit-direction", `${angle}deg`);
+      window.setTimeout(() => hud.classList.remove("damage-flash"), 160);
+    }
+    this.cameraController.addRecoil(0.028);
   }
 
   private finish(outcome: MatchOutcome) {
@@ -1062,13 +1190,18 @@ export class GameWorld {
   private demoInput(): InputSnapshot {
     const rival = this.rivals.filter((candidate) => candidate.alive).sort((a, b) => Vector3.DistanceSquared(a.root.position, this.player.root.position) - Vector3.DistanceSquared(b.root.position, this.player.root.position))[0];
     const training = this.trainingTargets.filter((candidate) => candidate.alive).sort((a, b) => Vector3.DistanceSquared(a.root.position, this.player.root.position) - Vector3.DistanceSquared(b.root.position, this.player.root.position))[0];
-    this.yaw = Math.PI;
+    if (rival) {
+      const toRival = rival.root.position.subtract(this.player.root.position);
+      this.yaw = Math.atan2(toRival.x, toRival.z);
+    } else {
+      this.yaw = Math.PI;
+    }
     this.cameraController.setYaw(this.yaw);
     return { forward: 0, right: 0, jump: false, sprint: false, crouch: false, aiming: true, firing: Boolean(rival || training), reloadPressed: false, lookX: 0, lookY: 0 };
   }
 
   private updateHud(_force = false) {
-    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
     this.hudController.render({
       hp: this.player.hp,
       shield: this.player.shield,

@@ -47,7 +47,7 @@ export default function GameCanvas() {
 
     void createGameScene(engine, canvas, {
       demo: isDemo,
-      step: "step2",
+      step: "step3",
       onResult: (nextOutcome) => {
         setOutcome(nextOutcome);
         if (document.pointerLockElement === canvas) document.exitPointerLock();
@@ -118,7 +118,7 @@ export default function GameCanvas() {
           </div>
           <div className="storm-readout">
 <span className="eyebrow">EXPLORATION MODE</span>
-              <strong id="storm-timer">STEP 2 // LIVE FIRE</strong>
+              <strong id="storm-timer">STEP 3 // HOSTILE CONTACT</strong>
               <small className="rig-status">PLAYER RIG // GLB HUMANOID · SKELETON</small>
           </div>
           <div className="remaining-readout">
@@ -194,9 +194,10 @@ export default function GameCanvas() {
       {outcome && (
         <section className="result-screen">
           <img src={LOGO_URL} alt="" />
-          <p>{outcome === "victory" ? "RIFT SECURED" : "SIGNAL LOST"}</p>
-          <h2>{outcome === "victory" ? "最後の地平線を制圧" : "嵐に飲まれた"}</h2>
-          <button type="button" onClick={() => window.location.reload()}>もう一度降下する</button>
+                      <p>{outcome === "victory" ? "RIFT SECURED" : "PLAYER DEAD"}</p>
+            <h2>{outcome === "victory" ? "最後の地平線を制圧" : "戦闘不能 — 再出撃が必要です"}</h2>
+            <button type="button" onClick={() => window.location.reload()}>RETRY</button>
+
         </section>
       )}
     </main>
