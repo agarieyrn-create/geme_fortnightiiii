@@ -44,7 +44,6 @@ export class TouchInputManager {
         if (action === "pickup" && !this.pickupPressed) this.pickupPressed = true;
         if (action?.startsWith("slot")) this.slotPressed = Number(action.slice(-1));
         if (action === "medkit" && !this.medkitPressed) this.medkitPressed = true;
-        if (action === "aim" || action === "fire" || action === "reload") this.showDebug(action);
         button.setPointerCapture?.((event as PointerEvent).pointerId);
       });
       this.listen(button, "pointerup", (event) => {
@@ -65,9 +64,8 @@ export class TouchInputManager {
     // PC mouse values remain untouched in InputManager.
     const mobileYaw = -this.lookX;
     const mobilePitch = this.lookY * 2.05;
-    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint, crouch: this.crouch, aiming: this.aiming, firing: this.firing, reloadPressed: this.reloadPressed, pickupPressed: this.pickupPressed, slotPressed: this.slotPressed, medkitPressed: this.medkitPressed, lookX: mobileYaw, lookY: mobilePitch };
-    const moveDebug = document.getElementById("move-input-debug");
-    if (moveDebug) moveDebug.textContent = `Move Input: X: ${this.moveX.toFixed(2)} Y: ${this.moveY.toFixed(2)}`;
+    const autoSprint = Math.hypot(this.moveX, this.moveY) >= 0.82;
+    const snapshot: InputSnapshot = { forward: this.moveY, right: this.moveX, jump: this.jump, sprint: this.sprint || autoSprint, crouch: this.crouch, aiming: this.aiming, firing: this.firing, reloadPressed: this.reloadPressed, pickupPressed: this.pickupPressed, slotPressed: this.slotPressed, medkitPressed: this.medkitPressed, lookX: mobileYaw, lookY: mobilePitch };
     this.lookX = 0;
     this.lookY = 0;
     this.reloadPressed = false;
@@ -179,15 +177,6 @@ export class TouchInputManager {
   private setKnob(x: number, y: number) {
     const knob = document.getElementById("touch-knob");
     if (knob) knob.style.transform = `translate(${x * 42}px, ${-y * 42}px)`;
-  }
-
-  private showDebug(action: string) {
-    const label = action === "aim" ? "AIM INPUT OK" : action === "fire" ? "FIRE INPUT OK" : "RELOAD INPUT OK";
-    const element = document.getElementById("input-debug");
-    if (!element) return;
-    element.textContent = label;
-    element.classList.add("active");
-    window.setTimeout(() => element.classList.remove("active"), 1000);
   }
 
   private releaseAction(action?: string, pointerId?: number) {

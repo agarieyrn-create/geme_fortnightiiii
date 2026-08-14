@@ -188,3 +188,47 @@ button { font: inherit; }
     font-size: 7px;
   }
 }
+
+/* Japanese child-friendly mobile HUD: edge anchored, translucent, and never covering the central play view. */
+@media (max-width: 767px), (pointer: coarse) {
+  .touch-actions {
+    right: 14px;
+    bottom: 18px;
+    display: grid;
+    grid-template-columns: repeat(2, 76px);
+    grid-template-areas:
+      "aim fire"
+      "jump crouch"
+      "pickup medkit";
+    gap: 6px;
+    width: 158px;
+    max-width: none;
+  }
+  .touch-actions button { min-height: 34px; padding: 5px 3px; font-size: 10px; letter-spacing: .02em; }
+  .touch-aim { grid-area: aim; }
+  .touch-fire { grid-area: fire; min-height: 48px !important; font-size: 14px !important; background: rgba(171, 46, 48, .72) !important; border-color: rgba(255, 153, 139, .82) !important; }
+  .touch-jump { grid-area: jump; }
+  .touch-crouch { grid-area: crouch; }
+  .touch-pickup { grid-area: pickup; display: none; }
+  .touch-medkit { grid-area: medkit; display: none; }
+  .touch-pickup.is-available, .touch-medkit.is-available { display: block; }
+  .touch-stick { left: 16px; bottom: 22px; width: 112px; height: 112px; opacity: .72; }
+  .touch-swipe-hint { display: none; }
+  .step4-mode .combat-panel { right: 14px; bottom: 160px; width: 176px; transform: none; text-align: right; }
+  .step4-mode .weapon-tag { font-size: 9px; }
+  .step4-mode .ammo-value strong { font-size: 30px; }
+  .weapon-slots { display: flex; justify-content: flex-end; gap: 4px; margin-top: 4px; }
+  .weapon-slots button { width: 42px; height: 24px; padding: 0; border: 1px solid rgba(124, 175, 184, .55); background: rgba(2, 12, 22, .54); color: #8ba6ad; font: 700 10px "Chakra Petch", sans-serif; }
+  .weapon-slots button.selected { border-color: #13d9c4; color: #13d9c4; box-shadow: inset 0 0 10px rgba(19, 217, 196, .16); }
+  .hud-reload { display: none; position: absolute; right: 0; top: 38px; padding: 3px 6px; border: 1px solid rgba(246, 182, 73, .72); background: rgba(4, 18, 30, .7); color: #ffe0a3; font: 9px "Noto Sans JP", sans-serif; }
+  .hud-reload.is-available { display: block; }
+  .medkit-value { display: none; position: fixed; left: 14px; bottom: 158px; margin: 0; padding: 4px 7px; border: 1px solid rgba(255, 181, 169, .65); background: rgba(4, 18, 30, .68); color: #ffb5a9; font: 10px "Noto Sans JP", sans-serif; }
+  .medkit-value.is-available { display: block; }
+  .step4-mode .signal-card { display: none; }
+  .step4-mode .state-chip { right: 14px; bottom: 130px; font-size: 8px; }
+  .step4-mode .control-strip { display: none; }
+  .move-input-debug, .input-debug, .god-mode-toggle { display: none !important; }
+}
+
+/* Japanese labels stay compact on desktop as well. */
+.weapon-slots button { font-style: normal; }

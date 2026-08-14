@@ -1,9 +1,9 @@
 import type { FireRequest, WeaponDefinition, WeaponId, WeaponState } from "./contracts";
 
 export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
-  assault: { id: "assault", name: "ASSAULT RIFLE", damage: 25, magazineSize: 30, fireInterval: 0.145, range: 500, ammoType: "medium", pellets: 1 },
-  smg: { id: "smg", name: "SMG", damage: 15, magazineSize: 30, fireInterval: 0.075, range: 260, ammoType: "light", pellets: 1 },
-  shotgun: { id: "shotgun", name: "SHOTGUN", damage: 14, magazineSize: 5, fireInterval: 0.78, range: 90, ammoType: "shells", pellets: 8 },
+  assault: { id: "assault", name: "アサルトライフル", damage: 25, magazineSize: 30, fireInterval: 0.145, range: 500, ammoType: "medium", pellets: 1 },
+  smg: { id: "smg", name: "サブマシンガン", damage: 15, magazineSize: 30, fireInterval: 0.075, range: 260, ammoType: "light", pellets: 1 },
+  shotgun: { id: "shotgun", name: "ショットガン", damage: 14, magazineSize: 5, fireInterval: 0.78, range: 90, ammoType: "shells", pellets: 8 },
 };
 
 type MagazineState = { magazine: number; reserve: number };

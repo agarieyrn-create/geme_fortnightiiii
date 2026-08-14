@@ -509,6 +509,7 @@ export class GameWorld {
   private medkits = 0;
   private medkitTimer = 0;
   private nearbyPickup?: Pickup;
+  private selectedCharacterId: string;
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
@@ -537,8 +538,9 @@ export class GameWorld {
       godToggle.setAttribute("aria-pressed", String(this.debugGodMode));
       this.pushEvent(this.debugGodMode ? "DEBUG GOD MODE ON" : "DEBUG GOD MODE OFF");
     });
+    this.selectedCharacterId = options.avatarId;
     this.player = new Combatant(scene, "ranger", new Color3(0.34, 0.28, 0.19), new Vector3(0, 0, 36));
-    this.player.applyLoadout(options.avatarId);
+    this.player.applyLoadout(this.selectedCharacterId);
     this.player.hp = options.step === "step3" || options.step === "step4" ? PLAYER_MAX_HP : 100;
     this.player.shield = options.step === "step3" || options.step === "step4" ? 0 : 65;
     if (options.step === "full" || options.step === "step3" || options.step === "step4") {
@@ -558,7 +560,8 @@ export class GameWorld {
     scene.activeCamera = this.camera;
     this.cameraController = new CameraController(this.camera, this.obstacles);
     this.weaponSystem = new WeaponSystem();
-    if (options.step === "step3" || options.step === "full") {
+          if (options.step === "step3" || options.step === "full") {
+
       this.weaponSystem.equip("assault", 120);
       this.player.setWeaponVisible(true);
     } else {
@@ -577,9 +580,12 @@ export class GameWorld {
   }
 
   setPlayerAvatar(avatarId: string) {
+    // Selection is allowed only in the briefing. Once play starts, the same
+    // CharacterVisual and its animations remain active until the world ends.
     if (this.mode !== "briefing") return;
-    this.player.applyLoadout(avatarId);
-    this.announcement = `${avatarId.toUpperCase()} の降下準備完了`;
+    this.selectedCharacterId = avatarId;
+    this.player.applyLoadout(this.selectedCharacterId);
+    this.announcement = `${this.selectedCharacterId.toUpperCase()} の降下準備完了`;
   }
 
   update(delta: number) {
@@ -1018,13 +1024,13 @@ export class GameWorld {
 
   private createPickups() {
     const placements: Array<[number, number, Pickup["type"], string, import("./contracts").WeaponId | undefined, "medium" | "light" | "shells" | undefined, number | undefined]> = [
-      [-4, 23, "weapon", "ASSAULT RIFLE", "assault", undefined, undefined],
-      [16, -4, "weapon", "SHOTGUN", "shotgun", undefined, undefined],
-      [-31, -23, "weapon", "SMG", "smg", undefined, undefined],
-      [34, 32, "ammo", "MEDIUM AMMO", undefined, "medium", 30],
-      [-49, 4, "ammo", "LIGHT AMMO", undefined, "light", 30],
-      [8, -52, "ammo", "SHELLS", undefined, "shells", 12],
-      [23, -31, "med", "MED KIT", undefined, undefined, 1],
+      [-4, 23, "weapon", "アサルトライフル", "assault", undefined, undefined],
+      [16, -4, "weapon", "ショットガン", "shotgun", undefined, undefined],
+      [-31, -23, "weapon", "サブマシンガン", "smg", undefined, undefined],
+      [34, 32, "ammo", "弾薬（中）", undefined, "medium", 30],
+      [-49, 4, "ammo", "弾薬（小）", undefined, "light", 30],
+      [8, -52, "ammo", "ショットガンの弾", undefined, "shells", 12],
+      [23, -31, "med", "回復キット", undefined, undefined, 1],
     ];
     placements.forEach(([x, z, type, label, weaponId, ammoType, amount], index) => {
       const root = new TransformNode(`pickup-${index}`, this.scene);
@@ -1266,7 +1272,7 @@ export class GameWorld {
       this.announcement = `${pickup.label} +${pickup.amount ?? 30}`;
     } else if (pickup.type === "med") {
       this.medkits = Math.min(3, this.medkits + 1);
-      this.announcement = `MED KIT ×${this.medkits}`;
+      this.announcement = `回復キット ×${this.medkits}`;
     } else {
       this.player.shield = Math.min(100, this.player.shield + 28);
       this.announcement = "シールド +28";
@@ -1277,13 +1283,13 @@ export class GameWorld {
 
   private beginMedkit() {
     if (this.medkits <= 0 || this.medkitTimer > 0 || this.player.hp >= PLAYER_MAX_HP) {
-      this.pushEvent(this.medkits <= 0 ? "MED KITなし" : "HPは最大です");
+      this.pushEvent(this.medkits <= 0 ? "回復キットがないよ" : "HPはいっぱいだよ");
       return;
     }
     this.medkits -= 1;
     this.medkitTimer = MEDKIT_USE_TIME;
-    this.announcement = "MED KIT 使用中…";
-    this.pushEvent("MED KIT 使用開始");
+    this.announcement = "回復中…";
+    this.pushEvent("回復をはじめたよ");
     window.setTimeout(() => {
       if (this.medkitTimer <= 0 && this.player.alive) {
         this.player.hp = Math.min(PLAYER_MAX_HP, this.player.hp + MEDKIT_HEAL);
@@ -1310,7 +1316,7 @@ export class GameWorld {
     if (pickupButton) pickupButton.disabled = !nearest;
     const medkitButton = document.querySelector<HTMLButtonElement>('[data-touch-action="medkit"]');
     if (medkitButton) medkitButton.disabled = this.medkits <= 0 || this.medkitTimer > 0;
-    this.announcement = nearest ? `PICK UP  ·  ${nearest.label}` : (this.medkitTimer > 0 ? "MED KIT 使用中…" : "探索して装備を整える");
+    this.announcement = nearest ? `${nearest.label}をひろう` : (this.medkitTimer > 0 ? "回復中…" : "近くのアイテムを探そう");
   }
 
   private updateCamera(delta: number) {
@@ -1396,7 +1402,8 @@ export class GameWorld {
       aiming: this.playerController.aiming,
       crouching: this.playerController.crouching,
       pickup: this.announcement,
-      weaponName: this.weaponSystem.definition()?.name ?? "NO WEAPON",
+             weaponName: this.weaponSystem.definition()?.name ?? "武器なし",
+
       slots: this.weaponSystem.slots(),
       medkits: this.medkits,
     }, this.player.root.position, this.stormRadius);

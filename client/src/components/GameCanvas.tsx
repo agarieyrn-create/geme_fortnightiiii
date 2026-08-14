@@ -107,17 +107,12 @@ export default function GameCanvas() {
         <div className="touch-stick" aria-hidden="true"><div id="touch-knob" className="touch-knob" /></div>
         <span className="touch-swipe-hint">SWIPE TO LOOK</span>
         <div className="touch-actions">
-          <button type="button" data-touch-action="pickup">PICKUP</button>
-          <button type="button" data-touch-action="medkit">MED KIT</button>
-          <button type="button" data-touch-action="slot1">SLOT 1</button>
-          <button type="button" data-touch-action="slot2">SLOT 2</button>
-          <button type="button" data-touch-action="slot3">SLOT 3</button>
-          <button type="button" data-touch-action="aim">AIM</button>
-          <button type="button" data-touch-action="fire">FIRE</button>
-          <button type="button" data-touch-action="reload">RELOAD</button>
-          <button type="button" data-touch-action="jump">JUMP</button>
-          <button type="button" data-touch-action="crouch">CROUCH</button>
-          <button type="button" data-touch-action="sprint">RUN</button>
+          <button className="touch-pickup" type="button" data-touch-action="pickup">ひろう</button>
+          <button className="touch-medkit" type="button" data-touch-action="medkit">回復</button>
+          <button className="touch-aim" type="button" data-touch-action="aim">ねらう</button>
+          <button className="touch-fire" type="button" data-touch-action="fire">うつ</button>
+          <button className="touch-jump" type="button" data-touch-action="jump">ジャンプ</button>
+          <button className="touch-crouch" type="button" data-touch-action="crouch">しゃがむ</button>
         </div>
       </div>
 
@@ -131,13 +126,14 @@ export default function GameCanvas() {
             </div>
           </div>
           <div className="storm-readout">
-<span className="eyebrow">EXPLORATION MODE</span>
-              <strong id="storm-timer">STEP 4 // SCAVENGE</strong>
-              <small className="rig-status">PLAYER RIG // GLB HUMANOID · SKELETON</small>
+              <span className="eyebrow">たんけんモード</span>
+              <strong id="storm-timer">STEP 4 // ひろう</strong>
+              <small className="rig-status">3Dプレイヤー</small>
+
           </div>
           <div className="remaining-readout">
-            <span className="eyebrow">SURVIVORS</span>
-            <strong>FREE ROAM</strong>
+            <span className="eyebrow">のこり</span>
+            <strong>自由にたんけん</strong>
           </div>
         </header>
 
@@ -149,19 +145,25 @@ export default function GameCanvas() {
             <span className="north-mark">N</span>
             <span className="map-label">RIFT-07</span>
           </div>
-          <div className="threat-card"><span>ZONE</span><b id="zone-status">STABLE</b></div>
+          <div className="threat-card"><span>エリア</span><b id="zone-status">安全</b></div>
         </aside>
 
         <section className="vitals-panel" aria-label="プレイヤー状態">
           <div className="vital-row"><span>HP</span><div className="meter"><i id="health-fill" /></div><b id="health-value">100</b></div>
           <div className="vital-row shield"><span>SH</span><div className="meter"><i id="shield-fill" /></div><b id="shield-value">50</b></div>
-          <div className="kill-readout"><span>ELIMS</span><strong id="elims-value">0</strong></div>
+          <div className="kill-readout"><span>撃破</span><strong id="elims-value">0</strong></div>
         </section>
 
         <section className="combat-panel" aria-label="武器状態">
-          <div className="weapon-tag"><span className="weapon-dot" /><span id="weapon-name">NO WEAPON</span> <i id="aim-status">HIP</i></div>
-          <div className="ammo-value"><strong id="ammo-value">30</strong><span>/ <i id="reserve-value">120</i></span></div>
-          <div className="weapon-slots"><i id="slot-1" className="selected">EMPTY</i><i id="slot-2">EMPTY</i><i id="slot-3">EMPTY</i></div><div id="medkit-value" className="medkit-value">MED KIT ×0</div>
+          <div className="weapon-tag"><span className="weapon-dot" /><span id="weapon-name">武器なし</span> <i id="aim-status">通常</i></div>
+          <div className="ammo-value"><strong id="ammo-value">0</strong><span>/ <i id="reserve-value">0</i></span></div>
+          <button className="hud-reload" type="button" data-touch-action="reload">リロード</button>
+          <div className="weapon-slots" aria-label="武器スロット">
+            <button id="slot-1" className="selected" type="button" data-touch-action="slot1">なし</button>
+            <button id="slot-2" type="button" data-touch-action="slot2">なし</button>
+            <button id="slot-3" type="button" data-touch-action="slot3">なし</button>
+          </div>
+          <button id="medkit-value" className="medkit-value" type="button" data-touch-action="medkit">回復 ×0</button>
         </section>
 
         <section className="signal-card" aria-label="近くの補給物資">
@@ -169,14 +171,11 @@ export default function GameCanvas() {
           <div><span>FIELD SIGNAL</span><strong id="pickup-status">補給物資を探索</strong></div>
         </section>
 
-        <div id="input-debug" className="input-debug" role="status" aria-live="polite" />
-        <div id="move-input-debug" className="move-input-debug" role="status" aria-live="polite">Move Input: X: 0.00 Y: 0.00</div>
-        <button id="god-mode-toggle" className="god-mode-toggle" type="button" aria-pressed="false">GOD: OFF</button>
         <div className="crosshair" aria-hidden="true"><i /><b /></div>
-        <div className="state-chip"><span>MOVE STATE</span><strong id="motion-state">IDLE</strong><i id="crouch-state">STAND</i></div>
+        <div className="state-chip"><span>うごき</span><strong id="motion-state">待機</strong><i id="crouch-state">立つ</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>
         <ol id="event-feed" className="event-feed" aria-label="戦闘ログ" />
-        <p className="control-strip">WASD 移動 <b>·</b> SHIFT ダッシュ <b>·</b> RMB AIM <b>·</b> LMB FIRE <b>·</b> R リロード <b>·</b> SPACE ジャンプ <b>·</b> C / CTRL しゃがみ</p>
+        <p className="control-strip">WASD 移動 <b>·</b> マウス ねらう／うつ <b>·</b> R リロード <b>·</b> SPACE ジャンプ <b>·</b> C しゃがむ</p>
       </div>
 
       {!started && (
@@ -186,8 +185,8 @@ export default function GameCanvas() {
             <p className="kicker">SOLO EXPEDITION // RIFT-07</p>
             <h1>嵐の外縁で、<em>次の一手</em>を奪え。</h1>
             <p className="launch-copy">浮遊群島に降下し、物資を確保せよ。電磁嵐が収束する前に、最後の生存者を決める。</p>
-            <button type="button" className="launch-button" onClick={beginMatch}>STEP 4を開始 <span>↗</span></button>
-            <p className="launch-note">STEP 4 — SCAVENGE / 拾う・持つ・使う</p>
+            <button type="button" className="launch-button" onClick={beginMatch}>ゲーム開始 <span>↗</span></button>
+            <p className="launch-note">STEP 4 — ひろう・持つ・使う</p>
           </div>
           <aside className="avatar-chooser" aria-label="降下アバター選択">
             <div className="chooser-heading"><span>DEPLOYMENT LOADOUT</span><strong>アバターを選択</strong></div>
@@ -210,9 +209,9 @@ export default function GameCanvas() {
       {outcome && (
         <section className="result-screen">
           <img src={LOGO_URL} alt="" />
-                      <p>{outcome === "victory" ? "RIFT SECURED" : "PLAYER DEAD"}</p>
-            <h2>{outcome === "victory" ? "最後の地平線を制圧" : "戦闘不能 — 再出撃が必要です"}</h2>
-            <button type="button" onClick={() => window.location.reload()}>RETRY</button>
+                      <p>{outcome === "victory" ? "エリアを守ったよ" : "たおれてしまった"}</p>
+            <h2>{outcome === "victory" ? "さいごまで生きのびた" : "もう一度ちょうせんしよう"}</h2>
+            <button type="button" onClick={() => window.location.reload()}>もう一度</button>
 
         </section>
       )}
