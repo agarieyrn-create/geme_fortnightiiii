@@ -671,20 +671,34 @@ export class GameWorld {
     if (typeof window === "undefined") return;
     this.audioContext ??= new AudioContext();
     if (this.audioContext.state === "suspended") void this.audioContext.resume();
-    const tones: Record<typeof kind, [number, number, number]> = {
-      door: [190, 0.14, 0.045], spawn: [92, 0.22, 0.055], clear: [420, 0.18, 0.05], key: [660, 0.16, 0.045], chest: [520, 0.3, 0.05], boss: [72, 0.42, 0.065], victory: [580, 0.34, 0.055], warning: [180, 0.12, 0.05], impact: [110, 0.16, 0.05],
+    const patterns: Record<typeof kind, { notes: number[]; noteLength: number; volume: number; type: "sine" | "triangle" | "sawtooth" | "square" }> = {
+      // Door: three bright notes rising, like a small door unlocking.
+      door: { notes: [330, 494, 659], noteLength: 0.09, volume: 0.045, type: "triangle" },
+      // Enemy: two low descending sawtooth notes, clearly different from success sounds.
+      spawn: { notes: [138, 82], noteLength: 0.16, volume: 0.052, type: "sawtooth" },
+      // Clear: a short major triad ascending, warm and celebratory.
+      clear: { notes: [523, 659, 784], noteLength: 0.11, volume: 0.045, type: "sine" },
+      key: { notes: [660], noteLength: 0.16, volume: 0.04, type: "sine" },
+      chest: { notes: [392, 523, 784], noteLength: 0.1, volume: 0.045, type: "triangle" },
+      boss: { notes: [72, 54], noteLength: 0.2, volume: 0.058, type: "sawtooth" },
+      victory: { notes: [523, 659, 784, 1047], noteLength: 0.1, volume: 0.05, type: "sine" },
+      warning: { notes: [180], noteLength: 0.12, volume: 0.05, type: "square" },
+      impact: { notes: [110], noteLength: 0.16, volume: 0.045, type: "square" },
     };
-    const [frequency, duration, volume] = tones[kind];
-    const oscillator = this.audioContext.createOscillator();
-    const gain = this.audioContext.createGain();
-    oscillator.type = kind === "warning" ? "square" : "sine";
-    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(Math.max(42, frequency * 0.62), this.audioContext.currentTime + duration);
-    gain.gain.setValueAtTime(volume, this.audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
-    oscillator.connect(gain).connect(this.audioContext.destination);
-    oscillator.start();
-    oscillator.stop(this.audioContext.currentTime + duration);
+    const pattern = patterns[kind];
+    const start = this.audioContext.currentTime;
+    pattern.notes.forEach((frequency, index) => {
+      const oscillator = this.audioContext!.createOscillator();
+      const gain = this.audioContext!.createGain();
+      const noteStart = start + index * pattern.noteLength;
+      oscillator.type = pattern.type;
+      oscillator.frequency.setValueAtTime(frequency, noteStart);
+      gain.gain.setValueAtTime(pattern.volume, noteStart);
+      gain.gain.exponentialRampToValueAtTime(0.001, noteStart + pattern.noteLength * 0.92);
+      oscillator.connect(gain).connect(this.audioContext!.destination);
+      oscillator.start(noteStart);
+      oscillator.stop(noteStart + pattern.noteLength);
+    });
   }
 
   private updateBossAttack(delta: number) {
