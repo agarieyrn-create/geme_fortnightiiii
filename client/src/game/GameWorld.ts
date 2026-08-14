@@ -522,6 +522,12 @@ export class GameWorld {
   private boss?: Rival;
   private dungeonWave: Rival[] = [];
   private dungeonObjective = "敵を3体たおそう！";
+  private readonly dungeonDoors = new Map<number, { mesh: Mesh; obstacle: Obstacle; opening: boolean; progress: number }>();
+  private dungeonWaveActive = true;
+  private bossAttackCooldown = 3.5;
+  private bossWarningTimer = 0;
+  private bossWarning?: Mesh;
+  private bossWarningPosition = new Vector3();
 
   constructor(readonly scene: Scene, readonly canvas: HTMLCanvasElement, readonly options: WorldOptions) {
     scene.clearColor = new Color4(0.018, 0.048, 0.11, 1);
@@ -594,6 +600,7 @@ export class GameWorld {
     this.announcement = this.options.step === "step5" ? "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！" : "裂け目への降下を確認";
     this.dungeonObjective = this.options.step === "step5" ? "敵を3体たおそう！" : this.dungeonObjective;
     this.pushEvent(this.options.step === "step5" ? "はじまりの遺跡へようこそ！" : "エリア RIFT-07 に着地");
+    if (this.options.step === "step5") this.playDungeonCue("spawn");
   }
 
   setPlayerAvatar(avatarId: string) {
@@ -614,7 +621,12 @@ export class GameWorld {
         this.enemyDirector.update(delta, this);
         this.updateProjectiles(delta);
         if (this.options.step === "full" || this.options.step === "step4" || this.options.step === "step5") this.updatePickups(delta);
-        if (this.options.step === "step5") this.updateDungeonProgress(delta);
+        if (this.options.step === "step5") {
+          this.updateDungeonDoors(delta);
+          this.updateDungeonRoomTrigger();
+          this.updateDungeonProgress(delta);
+          this.updateBossAttack(delta);
+        }
         this.checkEndState();
       } else if (this.options.step === "step2") {
         this.updateProjectiles(delta);
@@ -653,6 +665,68 @@ export class GameWorld {
     const tracer = MeshBuilder.CreateLines("bullet-tracer", { points: [origin, aimPoint] }, this.scene);
     tracer.color = TEAL;
     window.setTimeout(() => tracer.dispose(), 85);
+  }
+
+  private playDungeonCue(kind: "door" | "spawn" | "clear" | "key" | "chest" | "boss" | "victory" | "warning" | "impact") {
+    if (typeof window === "undefined") return;
+    this.audioContext ??= new AudioContext();
+    if (this.audioContext.state === "suspended") void this.audioContext.resume();
+    const tones: Record<typeof kind, [number, number, number]> = {
+      door: [190, 0.14, 0.045], spawn: [92, 0.22, 0.055], clear: [420, 0.18, 0.05], key: [660, 0.16, 0.045], chest: [520, 0.3, 0.05], boss: [72, 0.42, 0.065], victory: [580, 0.34, 0.055], warning: [180, 0.12, 0.05], impact: [110, 0.16, 0.05],
+    };
+    const [frequency, duration, volume] = tones[kind];
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    oscillator.type = kind === "warning" ? "square" : "sine";
+    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(42, frequency * 0.62), this.audioContext.currentTime + duration);
+    gain.gain.setValueAtTime(volume, this.audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
+    oscillator.connect(gain).connect(this.audioContext.destination);
+    oscillator.start();
+    oscillator.stop(this.audioContext.currentTime + duration);
+  }
+
+  private updateBossAttack(delta: number) {
+    if (this.options.step !== "step5" || this.dungeonArea !== 5 || !this.boss?.alive) return;
+    if (this.bossWarningTimer > 0) {
+      this.bossWarningTimer = Math.max(0, this.bossWarningTimer - delta);
+      if (this.bossWarning) {
+        const pulse = 1 + Math.sin(performance.now() * 0.018) * 0.08;
+        this.bossWarning.scaling.setAll(pulse);
+      }
+      if (this.bossWarningTimer === 0) {
+        if (this.bossWarning) { this.bossWarning.dispose(); this.bossWarning = undefined; }
+        const close = Vector3.DistanceSquared(this.player.root.position, this.bossWarningPosition) < 28;
+        if (close && this.player.alive) {
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(18);
+          this.showPlayerDamage(this.bossWarningPosition);
+          this.pushEvent(this.debugGodMode ? "範囲攻撃をよけた！" : "範囲攻撃 -18 HP");
+          if (eliminated) this.pushEvent("PLAYER DEAD");
+        }
+        this.playDungeonCue("impact");
+        this.bossAttackCooldown = 4.2;
+      }
+      return;
+    }
+    this.bossAttackCooldown -= delta;
+    if (this.bossAttackCooldown <= 0) {
+      this.bossWarningPosition.copyFrom(this.player.root.position);
+      this.bossWarning = MeshBuilder.CreateDisc("boss-warning", { radius: 2.8, tessellation: 32 }, this.scene);
+      this.bossWarning.position.copyFrom(this.bossWarningPosition);
+      this.bossWarning.position.y = 0.035;
+      this.bossWarning.rotation.x = Math.PI / 2;
+      const material = new StandardMaterial("boss-warning-material", this.scene);
+      material.diffuseColor = new Color3(0.92, 0.12, 0.08);
+      material.emissiveColor = new Color3(0.75, 0.04, 0.02);
+      material.alpha = 0.55;
+      material.disableLighting = true;
+      this.bossWarning.material = material;
+      this.bossWarningTimer = 1.25;
+      this.announcement = "気をつけて！ 赤い場所からにげよう！";
+      this.pushEvent("ボスの範囲攻撃！");
+      this.playDungeonCue("warning");
+    }
   }
 
   private playShotSound() {
@@ -706,6 +780,7 @@ export class GameWorld {
   }
 
   resolveObstacles(position: Vector3, clearance: number) {
+    if (this.options.step === "step5") position.x = Math.max(-7.4, Math.min(7.4, position.x));
     this.obstacles.forEach((obstacle) => {
       const delta = position.subtract(obstacle.position);
       delta.y = 0;
@@ -1047,6 +1122,23 @@ export class GameWorld {
     material.emissiveColor = new Color3(0.02, 0.08, 0.09);
     door.material = material;
     door.metadata = { dungeonDoor: true, z };
+    const obstacle: Obstacle = { position: new Vector3(0, 0, z), radius: 8.0 };
+    this.obstacles.push(obstacle);
+    this.dungeonDoors.set(z, { mesh: door, obstacle, opening: false, progress: 0 });
+  }
+
+  private updateDungeonDoors(delta: number) {
+    this.dungeonDoors.forEach((door) => {
+      if (!door.opening) return;
+      door.progress = Math.min(1, door.progress + delta / 0.72);
+      door.mesh.position.y = 1.7 + door.progress * 4.2;
+      door.mesh.visibility = 1 - door.progress;
+      if (door.progress >= 1) {
+        door.mesh.setEnabled(false);
+        const index = this.obstacles.indexOf(door.obstacle);
+        if (index >= 0) this.obstacles.splice(index, 1);
+      }
+    });
   }
 
   private spawnDungeonWave(positions: Vector3[], prefix: string) {
@@ -1094,6 +1186,7 @@ export class GameWorld {
       this.createDungeonPickup(new Vector3(0, 0.75, -4), "key", "カギ");
       this.dungeonTransition = 1.2;
       this.pushEvent("次の部屋へ進もう！");
+      this.playDungeonCue("clear");
     } else if (this.dungeonArea === 2 && this.dungeonKey) {
       this.dungeonArea = 3;
       this.dungeonObjective = "敵をぜんぶたおそう！";
@@ -1104,6 +1197,7 @@ export class GameWorld {
       ], "area3");
       this.dungeonTransition = 1.2;
       this.pushEvent("エリア3へ進もう！");
+      this.playDungeonCue("spawn");
     } else if (this.dungeonArea === 3 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
       this.dungeonArea = 4;
       this.dungeonObjective = "ボス部屋へ進もう！";
@@ -1112,7 +1206,10 @@ export class GameWorld {
       this.createDungeonPickup(new Vector3(4, 0.75, -50), "med", "回復キット", 1);
       this.dungeonTransition = 1.2;
       this.pushEvent("ボスへの道がひらいた！");
-    } else if (this.dungeonArea === 4) {
+      this.playDungeonCue("clear");
+    } else if (this.dungeonArea === 4 && this.player.root.position.z < -62) {
+      this.openDungeonDoor(-72);
+      if (this.player.root.position.z >= -70) return;
       const boss = new Rival(this.scene, "boss", new Vector3(0, 0, -78));
       boss.applyLoadout("rustjaw");
       boss.root.scaling.setAll(1.7);
@@ -1127,6 +1224,7 @@ export class GameWorld {
       this.dungeonObjective = "ボスをたおそう！";
       this.announcement = "ボスがあらわれた！";
       this.pushEvent("ボスがあらわれた！");
+      this.playDungeonCue("boss");
     } else if (this.dungeonArea === 5 && this.boss && !this.boss.alive && !this.dungeonChest) {
       this.dungeonArea = 6;
       this.dungeonChest = true;
@@ -1134,11 +1232,30 @@ export class GameWorld {
       this.announcement = "ボスをたおした！ 宝箱をあけよう！";
       this.createDungeonPickup(new Vector3(0, 0.75, -78), "chest", "宝箱");
       this.pushEvent("ボスをたおした！");
+      this.playDungeonCue("clear");
     }
   }
 
   private openDungeonDoor(z: number) {
-    this.scene.meshes.filter((mesh) => mesh.metadata?.dungeonDoor && mesh.metadata.z === z).forEach((mesh) => mesh.setEnabled(false));
+    const door = this.dungeonDoors.get(z);
+    if (!door || door.opening || door.progress >= 1) return;
+    door.opening = true;
+    this.announcement = "扉がひらいた！";
+    this.playDungeonCue("door");
+  }
+
+  private updateDungeonRoomTrigger() {
+    if (this.options.step !== "step5") return;
+    const z = this.player.root.position.z;
+    if (this.dungeonArea === 2 && z < 2) {
+      this.dungeonObjective = this.dungeonKey ? "次の部屋へ進もう！" : "カギを見つけよう！";
+      this.announcement = "エリア2　カギを見つけよう！";
+    } else if (this.dungeonArea === 3 && z < -18) {
+      this.dungeonObjective = "敵をぜんぶたおそう！";
+      this.announcement = "エリア3　敵をぜんぶたおそう！";
+    } else if ((this.dungeonArea === 4 || this.dungeonArea === 5) && z < -58) {
+      this.dungeonObjective = this.dungeonArea === 5 ? "ボスをたおそう！" : "ボス部屋へ進もう！";
+    }
   }
 
   private createRivals() {
@@ -1398,10 +1515,12 @@ export class GameWorld {
     pickup.root.setEnabled(false);
     if (pickup.type === "key") {
       this.dungeonKey = true;
+      this.playDungeonCue("key");
       this.dungeonObjective = "カギを手に入れた！ 次の部屋へ進もう！";
       this.announcement = "カギを手に入れた！";
     } else if (pickup.type === "chest") {
       this.announcement = "コイン ×100　回復　弾薬";
+      this.playDungeonCue("chest");
       this.pushEvent(this.announcement);
       this.finish("victory");
     } else if (pickup.type === "weapon" && pickup.weaponId) {
@@ -1524,7 +1643,9 @@ export class GameWorld {
       if (timeElement) timeElement.textContent = `${Math.floor(time / 60)}:${String(time % 60).padStart(2, "0")}`;
       if (elimsElement) elimsElement.textContent = String(this.elims);
     }
-    this.options.onResult(outcome);
+          if (outcome === "victory" && this.options.step === "step5") this.playDungeonCue("victory");
+      this.options.onResult(outcome);
+
   }
 
   private demoInput(): InputSnapshot {
