@@ -288,3 +288,21 @@ button { font: inherit; }
   .avatar-chooser { width: 100%; max-width: 480px; }
   .hub-menu button { min-height: 52px; }
 }
+
+/* STEP 6 clarity pass: make growth, rewards, and the next destination obvious to children. */
+.hub-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.strength-readout { color: #a9c5c8; font-weight: 700; }
+.strength-readout strong { color: #ffe07d; font-size: 1.18em; }
+.power-compare { padding: 8px 12px; border-left: 3px solid #ffd36a; background: rgba(255,211,106,.12); color: #ffe9a4; font-weight: 800; }
+.dungeon-card span + span { color: #ffd36a; }
+.locked-dungeons span { display: grid; gap: 5px; }
+.locked-dungeons small { color: #93aaad; font-size: 10px; line-height: 1.35; }
+.locked-dungeons .unlocked-dungeon { border-style: solid; border-color: rgba(19,217,196,.55); color: #cffff7; }
+.upgrade-card small:last-child { color: #ffe28a; font-weight: 800; }
+.result-stats { gap: 12px; }
+.result-stats span:last-child b { color: #ffd36a; }
+@media (max-width: 767px), (pointer: coarse) {
+  .hub-stats { gap: 5px 14px; }
+  .upgrade-card { align-items: stretch; }
+  .upgrade-card button { min-width: 86px; }
+}

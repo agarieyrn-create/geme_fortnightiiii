@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { createGameScene, type GameHandle, type MatchOutcome } from "@/game/scene";
-import { applyUpgrade, dungeonReward, loadProgression, saveProgression, type ProgressionData, upgradeCost } from "@/game/Progression";
+import { applyUpgrade, dungeonReward, getPlayerStats, getStrength, loadProgression, saveProgression, type ProgressionData, upgradeCost } from "@/game/Progression";
 
 const LOGO_URL = "/manus-storage/stormfall-logo-fixed_bf9eea9a.png";
 const REFERENCE_URL = "/manus-storage/stormfall-reference_00af8a30.png";
@@ -29,11 +29,15 @@ export default function GameCanvas() {
   const handleRef = useRef<GameHandle | null>(null);
   const isDemo =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
-  const [started, setStarted] = useState(isDemo);
+  const quickStart =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("play");
+  const [started, setStarted] = useState(isDemo || quickStart);
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [progression, setProgression] = useState<ProgressionData>(() => loadProgression());
   const [hubView, setHubView] = useState<"home" | "dungeons" | "upgrade" | "loadout" | "settings">("home");
   const [hubNotice, setHubNotice] = useState("");
+  const strength = getStrength(progression);
+  const playerStats = getPlayerStats(progression);
   const [avatar, setAvatar] = useState<AvatarId>(() => {
     if (typeof window === "undefined") return "kairo";
     const stored = window.sessionStorage.getItem("stormfall-selected-avatar") as AvatarId | null;
@@ -79,7 +83,8 @@ export default function GameCanvas() {
       }
       handleRef.current = handle;
       handle.setAvatar(selectedAvatarRef.current);
-      if (isDemo) handle.start();
+              if (isDemo || quickStart) handle.start();
+
       engine.runRenderLoop(() => handle.scene.render());
     });
 
@@ -94,7 +99,7 @@ export default function GameCanvas() {
       engine.dispose();
       startedRef.current = false;
     };
-  }, [isDemo, progression]);
+  }, [isDemo, quickStart, progression]);
 
   const changeUpgrade = (key: "hpLevel" | "attackLevel" | "reloadLevel") => {
     const result = applyUpgrade(progression, key);
@@ -213,14 +218,14 @@ export default function GameCanvas() {
             <img className="launch-logo" src={LOGO_URL} alt="" />
             <p className="kicker">STORMFALL // ぼうけんの拠点</p>
             <h1>{hubView === "home" ? "おかえり！" : hubView === "dungeons" ? "ダンジョンをえらぼう" : hubView === "upgrade" ? "もっと強くなろう" : hubView === "loadout" ? "そうびを見よう" : "せってい"}</h1>
-            <div className="coin-readout">コイン　<strong>🪙 {progression.coins}</strong></div>
+            <div className="hub-stats"><div className="coin-readout">コイン　<strong>🪙 {progression.coins}</strong></div><div className="strength-readout">つよさ　<strong>{strength}</strong></div></div>
             {hubNotice && <p className="hub-notice">{hubNotice}</p>}
             {hubView === "home" && <>
               <p className="launch-copy">たたかって、コインを集めて、もっと強くなろう！</p>
               <div className="hub-menu"><button type="button" onClick={() => setHubView("dungeons")}>ダンジョンへ</button><button type="button" onClick={() => setHubView("upgrade")}>強くする</button><button type="button" onClick={() => setHubView("loadout")}>そうび</button><button type="button" onClick={() => setHubView("settings")}>設定</button></div>
             </>}
-            {hubView === "dungeons" && <div className="hub-panel"><button className="dungeon-card" type="button" onClick={beginMatch}><strong>はじまりの遺跡</strong><span>敵をたおして、いちばん奥を目指そう！</span><b>挑戦する</b></button><div className="locked-dungeons"><span>？？？</span><span>？？？</span><span>？？？</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
-            {hubView === "upgrade" && <div className="hub-panel upgrade-list">{([ ["hpLevel", "HPアップ", "もっと元気になる！", "最大HP +20"], ["attackLevel", "こうげき力アップ", "てきに大きなダメージ！", "ダメージ +10%"], ["reloadLevel", "リロードアップ", "もっと早くリロード！", "時間 -10%"] ] as const).map(([key, title, copy, effect]) => <div className="upgrade-card" key={key}><div><strong>{title}</strong><span>{copy}</span><small>{effect}　Lv.{progression[key]}</small></div><button type="button" disabled={progression[key] >= 5 || progression.coins < upgradeCost(progression[key])} onClick={() => changeUpgrade(key)}>{progression[key] >= 5 ? "最大" : `${upgradeCost(progression[key])}コイン`}</button></div>)}<button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
+            {hubView === "dungeons" && <div className="hub-panel"><div className="power-compare">{strength >= 125 ? "楽にいけそう！" : strength >= 100 ? "ちょうどいい！" : "ちょっとむずかしいかも！"}</div><button className="dungeon-card" type="button" onClick={beginMatch}><strong>はじまりの遺跡</strong><span>おすすめのつよさ　100</span><span>クリア報酬　🪙 50　／　初回　🪙 100</span><b>出発する</b></button><div className="locked-dungeons"><span className={progression.forestUnlocked ? "unlocked-dungeon" : ""}>{progression.forestUnlocked ? "まよいの森" : "🔒 まよいの森"}<small>{progression.forestUnlocked ? "次のぼうけん" : "はじまりの遺跡をクリアしよう！"}</small></span><span>？？？</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
+            {hubView === "upgrade" && <div className="hub-panel upgrade-list"><div className="strength-readout">今のつよさ　<strong>{strength}</strong></div>{([ ["hpLevel", "HPアップ", "もっと元気になる！"], ["attackLevel", "こうげき力アップ", "てきに大きなダメージ！"], ["reloadLevel", "リロードアップ", "もっと早くリロード！"] ] as const).map(([key, title, copy]) => { const next = Math.min(5, progression[key] + 1); const current = key === "hpLevel" ? `${playerStats.maxHp}` : key === "attackLevel" ? `${playerStats.damage.toFixed(1)}` : `${playerStats.reloadTime.toFixed(1)}秒`; const nextValue = key === "hpLevel" ? `${playerStats.maxHp + 20}` : key === "attackLevel" ? `${(playerStats.damage * 1.1).toFixed(1)}` : `${(playerStats.reloadTime * 0.9).toFixed(1)}秒`; return <div className="upgrade-card" key={key}><div><strong>{title}</strong><span>{copy}</span><small>Lv.{progression[key]} → Lv.{next}</small><small>{key === "hpLevel" ? "HP" : key === "attackLevel" ? "こうげき力" : "リロード時間"}　{current} → {nextValue}</small></div><button type="button" disabled={progression[key] >= 5 || progression.coins < upgradeCost(progression[key])} onClick={() => changeUpgrade(key)}>{progression[key] >= 5 ? "最大" : `${upgradeCost(progression[key])}コイン`}</button></div>})}<button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "loadout" && <div className="hub-panel"><p>今つかえる武器</p><div className="loadout-list"><span>アサルトライフル</span><span>サブマシンガン</span><span>ショットガン</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "settings" && <div className="hub-panel settings-panel"><label>効果音　<input type="range" min="0" max="1" step="0.1" value={progression.sfxVolume} onChange={(event) => updateVolume("sfxVolume", Number(event.target.value))} /></label><label>BGM　<input type="range" min="0" max="1" step="0.1" value={progression.bgmVolume} onChange={(event) => updateVolume("bgmVolume", Number(event.target.value))} /></label><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
           </div>
@@ -234,7 +239,7 @@ export default function GameCanvas() {
                       <p>{outcome === "victory" ? "ダンジョンクリア！" : "ゲームオーバー"}</p>
             <h2>{outcome === "victory" ? "はじまりの遺跡をクリアしたよ" : "もう一度ちょうせんしよう"}</h2>
             <div className="result-stats"><span>たおした敵：<b id="result-elims">0</b>体</span><span>クリア時間：<b id="result-time">--:--</b></span><span>コイン：<b id="result-coins">報酬を計算中</b></span></div>
-            <div className="result-actions"><button type="button" onClick={() => window.location.reload()}>もう一度</button><button type="button" onClick={() => { window.history.replaceState({}, "", window.location.pathname); window.location.reload(); }}>もどる</button></div>
+            <div className="result-actions"><button type="button" onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1`); window.location.reload(); }}>もう一度</button><button type="button" onClick={() => { window.history.replaceState({}, "", window.location.pathname); window.location.reload(); }}>拠点へもどる</button></div>
 
         </section>
       )}

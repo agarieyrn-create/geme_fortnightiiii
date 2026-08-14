@@ -1,6 +1,8 @@
 export type ProgressionData = {
   coins: number;
   clears: number;
+  ruinsCleared: boolean;
+  forestUnlocked: boolean;
   hpLevel: number;
   attackLevel: number;
   reloadLevel: number;
@@ -11,6 +13,8 @@ export type ProgressionData = {
 export const DEFAULT_PROGRESSION: ProgressionData = {
   coins: 0,
   clears: 0,
+  ruinsCleared: false,
+  forestUnlocked: false,
   hpLevel: 1,
   attackLevel: 1,
   reloadLevel: 1,
@@ -24,7 +28,8 @@ export function loadProgression(): ProgressionData {
   if (typeof window === "undefined") return DEFAULT_PROGRESSION;
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<ProgressionData> | null;
-    return { ...DEFAULT_PROGRESSION, ...(parsed ?? {}) };
+    const data = { ...DEFAULT_PROGRESSION, ...(parsed ?? {}) };
+    return { ...data, ruinsCleared: Boolean(data.ruinsCleared || data.clears > 0), forestUnlocked: Boolean(data.forestUnlocked || data.clears > 0) };
   } catch {
     return DEFAULT_PROGRESSION;
   }
@@ -47,9 +52,21 @@ export function applyUpgrade(data: ProgressionData, key: "hpLevel" | "attackLeve
   return { data: next, ok: true, message: "レベルアップ！" };
 }
 
+export function getStrength(data: ProgressionData) {
+  return 100 + (data.hpLevel - 1) * 15 + (data.attackLevel - 1) * 15 + (data.reloadLevel - 1) * 15;
+}
+
+export function getPlayerStats(data: ProgressionData) {
+  return {
+    maxHp: 300 + (data.hpLevel - 1) * 20,
+    damage: 25 * (1 + (data.attackLevel - 1) * 0.1),
+    reloadTime: 0.82 * Math.max(0.6, 1 - (data.reloadLevel - 1) * 0.1),
+  };
+}
+
 export function dungeonReward(data: ProgressionData) {
   const reward = data.clears === 0 ? 100 : 50;
-  const next = { ...data, coins: data.coins + reward, clears: data.clears + 1 };
+  const next = { ...data, coins: data.coins + reward, clears: data.clears + 1, ruinsCleared: true, forestUnlocked: true };
   saveProgression(next);
   return { data: next, reward };
 }
