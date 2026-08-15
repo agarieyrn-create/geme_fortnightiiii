@@ -28,6 +28,7 @@ export class PlayerController {
     this.crouching = snapshot.crouch && grounded;
     this.rig.setColliderHeight?.(this.crouching ? 1.55 : 2.4);
     this.camera.look(snapshot.lookX, snapshot.lookY);
+    this.camera.applyAutoFocus(delta, this.rig.root.position);
 
     const forward = this.camera.forward();
     const right = new Vector3(forward.z, 0, -forward.x);

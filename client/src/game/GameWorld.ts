@@ -37,18 +37,21 @@ const SAND = new Color3(0.31, 0.12, 0.035);
 const BASALT = new Color3(0.12, 0.055, 0.023);
 const RUST = new Color3(0.77, 0.16, 0.1);
 
-const PLAYER_MAX_HP = 300;
-const ENEMY_MAX_HP = 100;
+const EASY_MODE = true;
+const PLAYER_MAX_HP = EASY_MODE ? 500 : 300;
+const ENEMY_MAX_HP = EASY_MODE ? 50 : 100;
 const PLAYER_WEAPON_RANGE = 500;
 const PLAYER_WEAPON_DAMAGE = 25;
 const PICKUP_RANGE = 3.2;
-const MEDKIT_HEAL = 50;
+const MEDKIT_HEAL = EASY_MODE ? 220 : 50;
 const MEDKIT_USE_TIME = 3;
 const ENEMY_ATTACK_RANGE = 25;
-const ENEMY_ATTACK_DAMAGE = 10;
-const ENEMY_ATTACK_INTERVAL = 1.15;
+const ENEMY_ATTACK_DAMAGE = EASY_MODE ? 2 : 10;
+const ENEMY_ATTACK_INTERVAL = EASY_MODE ? 2.35 : 1.15;
 // Test-only toggle: set false to restore the intended no-weapon scavenger start.
 const DEBUG_START_WITH_WEAPON = true;
+
+const easyDamage = (amount: number) => EASY_MODE ? Math.max(1, Math.round(amount * 0.25)) : amount;
 
 const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: Color3; cloak: Color3; scale: number }> = {
   kairo: { suit: new Color3(0.14, 0.18, 0.23), armor: new Color3(0.39, 0.29, 0.18), accent: TEAL, cloak: new Color3(0.34, 0.25, 0.15), scale: 1 },
@@ -439,22 +442,22 @@ class Rival extends Combatant {
   setStyle(style: "normal" | "melee" | "ranged" | "shield" | "forestBoss" | "caveBoss") {
     this.style = style;
     if (style === "melee") {
-      this.attackDamage = 12;
+      this.attackDamage = EASY_MODE ? 3 : 12;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.08);
       this.addMeleeSilhouette();
     } else if (style === "ranged") {
-      this.attackDamage = 8;
+      this.attackDamage = EASY_MODE ? 2 : 8;
       this.applyLoadout("veil");
       this.root.scaling.setAll(0.92);
       this.addRangedSilhouette();
     } else if (style === "forestBoss") {
-      this.attackDamage = 15;
+      this.attackDamage = EASY_MODE ? 4 : 15;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.82);
       this.addBossSilhouette("forest");
     } else if (style === "shield") {
-      this.attackDamage = 9;
+      this.attackDamage = EASY_MODE ? 2 : 9;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.16);
       const shield = MeshBuilder.CreateDisc(`${this.id}-shield`, { radius: 0.9, tessellation: 24 }, this.scene);
@@ -468,7 +471,7 @@ class Rival extends Combatant {
       shield.material = shieldMat;
       this.addShieldSilhouette(shieldMat);
     } else if (style === "caveBoss") {
-      this.attackDamage = 16;
+      this.attackDamage = EASY_MODE ? 4 : 16;
       this.applyLoadout("anker");
       this.root.scaling.setAll(2.05);
       this.addBossSilhouette("cave");
@@ -844,7 +847,7 @@ export class GameWorld {
     this.cameraController = new CameraController(this.camera, this.obstacles);
     this.configureRenderingPipeline();
     this.weaponSystem = new WeaponSystem();
-    this.weaponSystem.damageMultiplier = 1 + Math.max(0, this.progression.attackLevel - 1) * 0.1;
+    this.weaponSystem.damageMultiplier = (EASY_MODE ? 2.35 : 1) * (1 + Math.max(0, this.progression.attackLevel - 1) * 0.1);
     this.weaponSystem.reloadMultiplier = Math.max(0.6, 1 - Math.max(0, this.progression.reloadLevel - 1) * 0.1);
     const startsArmed = options.step === "step3" || options.step === "full" || ((options.step === "step4" || options.step === "step5") && DEBUG_START_WITH_WEAPON);
     if (startsArmed) {
@@ -1028,7 +1031,7 @@ export class GameWorld {
         if (this.bossWarning) { this.bossWarning.dispose(); this.bossWarning = undefined; }
         const close = Vector3.DistanceSquared(this.player.root.position, this.bossWarningPosition) < 28;
         if (close && this.player.alive) {
-          const eliminated = this.debugGodMode ? false : this.player.applyDamage(18);
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(easyDamage(18));
           this.showPlayerDamage(this.bossWarningPosition);
           this.pushEvent(this.debugGodMode ? "範囲攻撃をよけた！" : "範囲攻撃 -18 HP");
           if (eliminated) this.pushEvent("PLAYER DEAD");
@@ -1093,7 +1096,7 @@ export class GameWorld {
         this.caveBossRockMarker = undefined;
         const hit = Vector3.DistanceSquared(this.player.root.position, this.caveBossRockPosition) < 6.4;
         if (hit && this.player.alive) {
-          const eliminated = this.debugGodMode ? false : this.player.applyDamage(this.caveBossPhaseTwo ? 18 : 14);
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(easyDamage(this.caveBossPhaseTwo ? 18 : 14));
           this.showPlayerDamage(this.caveBossRockPosition);
           this.pushEvent(this.debugGodMode ? "岩をよけた！" : "岩の攻撃を受けた！");
           if (eliminated) this.pushEvent("PLAYER DEAD");
@@ -1121,7 +1124,7 @@ export class GameWorld {
         this.boss.root.position.addInPlace(this.forestBossDashDirection.scale(7.2));
         const hit = Vector3.DistanceSquared(this.player.root.position, this.boss.root.position) < 10;
         if (hit && this.player.alive) {
-          const eliminated = this.debugGodMode ? false : this.player.applyDamage(16);
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(easyDamage(16));
           this.showPlayerDamage(this.boss.root.position);
           this.pushEvent(this.debugGodMode ? "突進をよけた！" : "突進 -16 HP");
           if (eliminated) this.pushEvent("PLAYER DEAD");
@@ -1990,22 +1993,29 @@ export class GameWorld {
     });
   }
 
-  private createDungeonPickup(position: Vector3, type: Pickup["type"], label: string, amount?: number, ammoType?: Pickup["ammoType"]) {
+  private createDungeonPickup(position: Vector3, type: Pickup["type"], label: string, amount?: number, ammoType?: Pickup["ammoType"], weaponId?: import("./contracts").WeaponId) {
     const root = new TransformNode(`dungeon-pickup-${type}-${this.pickups.length}`, this.scene);
     root.position.copyFrom(position);
     const material = new StandardMaterial(`dungeon-pickup-material-${this.pickups.length}`, this.scene);
-    material.diffuseColor = type === "key" ? AMBER : type === "chest" ? new Color3(0.8, 0.45, 0.12) : type === "secret" ? new Color3(0.2, 0.82, 0.36) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
+    material.diffuseColor = type === "weapon" ? (weaponId === "shotgun" ? AMBER : weaponId === "smg" ? TEAL : new Color3(0.38, 0.68, 0.9)) : type === "key" ? AMBER : type === "chest" ? new Color3(0.8, 0.45, 0.12) : type === "secret" ? new Color3(0.2, 0.82, 0.36) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
     material.emissiveColor = material.diffuseColor.scale(0.35);
     const base = MeshBuilder.CreateBox(`dungeon-pickup-base-${this.pickups.length}`, { width: type === "chest" ? 1.6 : 0.72, height: type === "chest" ? 0.9 : 0.5, depth: type === "chest" ? 1.0 : 0.62 }, this.scene);
     base.parent = root;
     base.position.y = type === "chest" ? 0.45 : 0.25;
     base.material = material;
+    if (type === "weapon") {
+      const barrel = MeshBuilder.CreateCylinder(`dungeon-pickup-barrel-${this.pickups.length}`, { height: weaponId === "shotgun" ? 1.02 : 0.78, diameter: weaponId === "shotgun" ? 0.11 : 0.075, tessellation: 8 }, this.scene);
+      barrel.parent = root;
+      barrel.rotation.z = Math.PI / 2;
+      barrel.position.set(0.36, 0.38, 0);
+      barrel.material = material;
+    }
     const ring = MeshBuilder.CreateTorus(`dungeon-pickup-ring-${this.pickups.length}`, { diameter: type === "chest" ? 2.1 : 1.25, thickness: 0.035, tessellation: 20 }, this.scene);
     ring.parent = root;
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.04;
     ring.material = material;
-    this.pickups.push({ root, type, label, amount, ammoType, collected: false });
+    this.pickups.push({ root, type, label, amount, ammoType, weaponId, collected: false });
   }
 
   private updateDungeonProgress(delta: number) {
@@ -2028,6 +2038,7 @@ export class GameWorld {
       this.announcement = "クリア！ 次の部屋へ進もう！";
       this.openDungeonDoor(6);
       this.createDungeonPickup(new Vector3(0, 0.75, -4), "key", "カギ");
+      this.createDungeonPickup(new Vector3(-4.2, 0.75, -3.8), "weapon", "サブマシンガン", undefined, undefined, "smg");
       this.dungeonTransition = 1.2;
       this.pushEvent("次の部屋へ進もう！");
       this.playDungeonCue("clear");
@@ -2048,6 +2059,7 @@ export class GameWorld {
       this.openDungeonDoor(-42);
       this.createDungeonPickup(new Vector3(-4, 0.75, -50), "ammo", "弾薬", 60, "medium");
       this.createDungeonPickup(new Vector3(4, 0.75, -50), "med", "回復キット", 1);
+      this.createDungeonPickup(new Vector3(7.2, 0.75, -50), "weapon", "ショットガン", undefined, undefined, "shotgun");
       this.dungeonTransition = 1.2;
       this.pushEvent("ボスへの道がひらいた！");
       this.playDungeonCue("clear");
@@ -2058,9 +2070,9 @@ export class GameWorld {
       boss.applyLoadout("rustjaw");
       boss.root.scaling.setAll(1.7);
       boss.shield = 0;
-      boss.hp = 400;
-      boss.maxHp = 400;
-      boss.attackDamage = 14;
+      boss.hp = EASY_MODE ? 150 : 400;
+      boss.maxHp = EASY_MODE ? 150 : 400;
+      boss.attackDamage = EASY_MODE ? 4 : 14;
       this.rivals.push(boss);
       this.boss = boss;
       this.dungeonWave = [boss];
@@ -2124,6 +2136,7 @@ export class GameWorld {
       this.openDungeonDoor(-42);
       this.createDungeonPickup(new Vector3(-3, 0.75, -55), "ammo", "弾薬", 100, "medium");
       this.createDungeonPickup(new Vector3(3, 0.75, -55), "med", "回復キット", 2);
+      this.createDungeonPickup(new Vector3(6.6, 0.75, -55), "weapon", "ショットガン", undefined, undefined, "shotgun");
       this.playDungeonCue("clear");
     } else if (this.dungeonArea === 5 && z < -66) {
       this.openDungeonDoor(-74);
@@ -2131,8 +2144,8 @@ export class GameWorld {
       const boss = new Rival(this.scene, "gorum", new Vector3(0, 0, -86));
       boss.setStyle("caveBoss");
       boss.shield = 0;
-      boss.hp = 520;
-      boss.maxHp = 520;
+      boss.hp = EASY_MODE ? 230 : 520;
+      boss.maxHp = EASY_MODE ? 230 : 520;
       this.rivals.push(boss);
       this.boss = boss;
       this.dungeonWave = [boss];
@@ -2171,6 +2184,8 @@ export class GameWorld {
       this.dungeonObjective = "どっちに行く？";
       this.announcement = "クリア！ どっちに行く？";
       this.openDungeonDoor(6);
+      this.createDungeonPickup(new Vector3(-3.6, 0.75, 2.4), "weapon", "サブマシンガン", undefined, undefined, "smg");
+      this.createDungeonPickup(new Vector3(3.6, 0.75, 2.4), "weapon", "ショットガン", undefined, undefined, "shotgun");
       this.pushEvent("左は回復、右は宝箱の道だよ");
       this.playDungeonCue("clear");
     } else if (this.dungeonArea === 2 && !this.forestRoute && z < 1) {
@@ -2208,8 +2223,8 @@ export class GameWorld {
       const boss = new Rival(this.scene, "forest-guardian", new Vector3(0, 0, -82));
       boss.setStyle("forestBoss");
       boss.shield = 0;
-      boss.hp = 460;
-      boss.maxHp = 460;
+      boss.hp = EASY_MODE ? 200 : 460;
+      boss.maxHp = EASY_MODE ? 200 : 460;
       this.rivals.push(boss);
       this.boss = boss;
       this.dungeonWave = [boss];
@@ -2370,6 +2385,7 @@ export class GameWorld {
       else if (rawSnapshot.pickupPressed) this.pickupNearest();
       if (rawSnapshot.medkitPressed) this.beginMedkit();
     }
+    this.updateAutoFocusTarget(rawSnapshot);
     this.medkitTimer = Math.max(0, this.medkitTimer - delta);
     const usingMedkit = this.medkitTimer > 0;
     const snapshot = this.options.step === "step1" ? { ...rawSnapshot, aiming: false, firing: false, reloadPressed: false } : usingMedkit ? { ...rawSnapshot, forward: 0, right: 0, sprint: false, aiming: false, firing: false, jump: false } : rawSnapshot;
@@ -2377,6 +2393,33 @@ export class GameWorld {
     this.currentAiming = this.playerController.aiming;
     this.currentCrouching = this.playerController.crouching;
     this.lastMotionState = this.playerController.motion;
+  }
+
+  private updateAutoFocusTarget(snapshot: InputSnapshot) {
+    const hasManualLook = Math.abs(snapshot.lookX) + Math.abs(snapshot.lookY) > 0.45;
+    if ((!snapshot.aiming && !snapshot.firing) || hasManualLook) {
+      this.cameraController.setAutoFocusTarget();
+      return;
+    }
+    const eye = this.player.root.position.add(new Vector3(0, 1.25, 0));
+    const forward = this.cameraController.forward();
+    let bestTarget: Vector3 | undefined;
+    let bestScore = Number.POSITIVE_INFINITY;
+    const evaluate = (position: Vector3, height: number) => {
+      const toTarget = position.add(new Vector3(0, height, 0)).subtract(eye);
+      const distance = toTarget.length();
+      if (distance > 38 || distance < 0.1) return;
+      const alignment = Vector3.Dot(forward, toTarget.scale(1 / distance));
+      if (alignment < -0.12) return;
+      const score = distance + (1 - alignment) * 17;
+      if (score < bestScore) {
+        bestScore = score;
+        bestTarget = position.add(new Vector3(0, height, 0));
+      }
+    };
+    this.rivals.forEach((rival) => { if (rival.alive) evaluate(rival.root.position, 1.25); });
+    this.trainingTargets.forEach((target) => { if (target.alive) evaluate(target.root.position, 1.35); });
+    this.cameraController.setAutoFocusTarget(bestTarget);
   }
 
   private updatePlayerLegacy(delta: number) {
