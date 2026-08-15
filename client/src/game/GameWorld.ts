@@ -2137,7 +2137,10 @@ export class GameWorld {
     material.emissiveColor = color.scale(0.035);
     material.specularColor = Color3.Black();
     wall.material = material;
-    this.obstacles.push({ position: position.clone(), radius: Math.max(width, depth) * 0.52 });
+    // These low walls shape the maze visually. They must never become a hard
+    // collision gate: an open dungeon door always needs at least one clear
+    // route forward, including on narrow mobile movement paths.
+    wall.isPickable = false;
   }
 
   private updateDungeonProgress(delta: number) {
