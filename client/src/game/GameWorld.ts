@@ -695,6 +695,8 @@ export class GameWorld {
   private dungeonKey = false;
   private ruinsRescueTimer = 0;
   private readonly ruinsExplorationSites = new Set<string>();
+  private ruinsDepthRescueTimer = 0;
+  private readonly ruinsDepthSites = new Set<string>();
   private explorationTokens = 0;
   private explorationGoal = 0;
   private explorationLabel = "";
@@ -1295,12 +1297,13 @@ export class GameWorld {
 
   resolveObstacles(position: Vector3, clearance: number) {
     if (this.options.step === "step5") {
-      const ruinsWideExploration = !this.isForestDungeon && !this.isCaveDungeon && this.dungeonArea === 2;
+      const ruinsWideExploration = !this.isForestDungeon && !this.isCaveDungeon && this.dungeonArea >= 2 && this.dungeonArea <= 4;
       const maxX = ruinsWideExploration ? 40 : 7.4;
       position.x = Math.max(-maxX, Math.min(maxX, position.x));
       // The broad ruins may be explored from either side, but the boss route is
       // held at the final gate until the player has discovered enough landmarks.
       if (ruinsWideExploration && !this.dungeonKey && position.z < -10.85) position.z = -10.85;
+      if (ruinsWideExploration && this.dungeonArea === 4 && !this.explorationComplete() && position.z < -67.5) position.z = -67.5;
     }
     this.obstacles.forEach((obstacle) => {
       const delta = position.subtract(obstacle.position);
@@ -1454,6 +1457,10 @@ export class GameWorld {
       { id: "right-sanctum", x: 30, z: -8, width: 16, depth: 18 },
       { id: "south-shortcut", x: -14, z: -13, width: 20, depth: 8 },
       { id: "archive", x: 15, z: -15, width: 20, depth: 8 },
+      { id: "battleway", x: 0, z: -30, width: 24, depth: 22 },
+      { id: "west-gallery", x: -28, z: -46, width: 18, depth: 16 },
+      { id: "east-gallery", x: 28, z: -54, width: 18, depth: 16 },
+      { id: "depth-archive", x: 0, z: -64, width: 22, depth: 12 },
     ];
     pads.forEach((pad) => {
       const floor = MeshBuilder.CreateBox(`ruins-wide-${pad.id}`, { width: pad.width, height: 0.13, depth: pad.depth }, this.scene);
@@ -1470,6 +1477,9 @@ export class GameWorld {
       { id: "left-vault", position: new Vector3(-30, 0, -6), color: new Color3(0.18, 0.78, 0.38) },
       { id: "right-sanctum", position: new Vector3(30, 0, -8), color: new Color3(0.96, 0.55, 0.14) },
       { id: "archive", position: new Vector3(15, 0, -15), color: new Color3(0.13, 0.75, 0.86) },
+      { id: "west-gallery", position: new Vector3(-28, 0, -46), color: new Color3(0.2, 0.8, 0.42) },
+      { id: "east-gallery", position: new Vector3(28, 0, -54), color: new Color3(0.98, 0.5, 0.12) },
+      { id: "depth-archive", position: new Vector3(0, 0, -64), color: new Color3(0.1, 0.7, 0.88) },
     ].forEach(({ id, position, color }) => this.createWorldSignal(`ruins-site-${id}`, position, stoneMat, color));
     [-22, 22, -36, 36].forEach((x, index) => {
       const pillar = MeshBuilder.CreateCylinder(`ruins-wide-pillar-${index}`, { height: 4.3, diameterTop: 0.44, diameterBottom: 0.68, tessellation: 7 }, this.scene);
@@ -2208,6 +2218,24 @@ export class GameWorld {
     });
   }
 
+  private updateWideRuinsDepthSites() {
+    const sites = [
+      { id: "west-gallery", position: new Vector3(-28, 0, -46), label: "西の回廊を見つけた！" },
+      { id: "east-gallery", position: new Vector3(28, 0, -54), label: "東の保管庫を見つけた！" },
+      { id: "depth-archive", position: new Vector3(0, 0, -64), label: "深層記録庫を見つけた！" },
+    ];
+    sites.forEach((site) => {
+      if (this.ruinsDepthSites.has(site.id)) return;
+      if (Vector3.DistanceSquared(this.player.root.position, site.position) > 6.2 * 6.2) return;
+      this.ruinsDepthSites.add(site.id);
+      this.explorationTokens = this.ruinsDepthSites.size;
+      this.dungeonObjective = `最深部の探索地点をあと ${Math.max(0, this.explorationGoal - this.explorationTokens)}か所見つけよう！`;
+      this.announcement = site.label;
+      this.pushEvent(site.label);
+      this.playExplorationHint("deep");
+    });
+  }
+
   private updateDungeonProgress(delta: number) {
     if (this.options.step !== "step5") return;
     if (this.isCaveDungeon) {
@@ -2244,8 +2272,8 @@ export class GameWorld {
       this.dungeonObjective = "敵をぜんぶたおそう！";
       this.openDungeonDoor(-12);
       this.spawnDungeonWave([
-        new Vector3(-8, 0, -24), new Vector3(8, 0, -26), new Vector3(-5, 0, -34),
-        new Vector3(5, 0, -36),
+        new Vector3(-15, 0, -24), new Vector3(15, 0, -26), new Vector3(-22, 0, -37),
+        new Vector3(22, 0, -39), new Vector3(0, 0, -33),
       ], "area3");
       this.dungeonTransition = 1.2;
       this.pushEvent("エリア3へ進もう！");
@@ -2264,17 +2292,18 @@ export class GameWorld {
       }
     } else if (this.dungeonArea === 3 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
       this.dungeonArea = 4;
-      this.beginExploration(3, "最深部の石版");
+      this.ruinsDepthSites.clear();
+      this.ruinsDepthRescueTimer = 0;
+      this.beginExploration(2, "最深部の探索地点");
+      this.dungeonObjective = "最深部の探索地点を2か所見つけよう！";
       this.openDungeonDoor(-42);
-      this.createDungeonPickup(new Vector3(-4, 0.75, -50), "ammo", "弾薬", 60, "medium");
-      this.createDungeonPickup(new Vector3(4, 0.75, -50), "med", "回復キット", 1);
-      this.createDungeonPickup(new Vector3(7.2, 0.75, -50), "weapon", "ショットガン", undefined, undefined, "shotgun");
-      this.createDungeonPickup(new Vector3(-5.5, 0.75, -48), "rune", "最深部の石版 1");
-      this.createDungeonPickup(new Vector3(5.5, 0.75, -57), "rune", "最深部の石版 2");
-      this.createDungeonPickup(new Vector3(0, 0.75, -65), "rune", "最深部の石版 3");
-      this.createDungeonPickup(new Vector3(-5.8, 0.75, -61), "secret", "崩れた宝物庫", 25);
+      this.createDungeonPickup(new Vector3(-31, 0.75, -48), "med", "西の回廊の回復キット", 2);
+      this.createDungeonPickup(new Vector3(-26, 0.75, -53), "ammo", "西の回廊の弾薬", 100, "medium");
+      this.createDungeonPickup(new Vector3(31, 0.75, -55), "weapon", "東の保管庫のショットガン", undefined, undefined, "shotgun");
+      this.createDungeonPickup(new Vector3(26, 0.75, -59), "secret", "東の保管庫の宝箱", 40);
+      this.createDungeonPickup(new Vector3(0, 0.75, -64), "secret", "深層記録庫の古代コイン", 60);
       this.dungeonTransition = 1.2;
-      this.pushEvent("ボスへの道がひらいた！");
+      this.pushEvent("左右の回廊と深層記録庫を探してみよう！");
       this.playDungeonCue("clear");
       this.playExplorationHint("deep");
     } else if (this.dungeonArea === 4 && this.explorationComplete() && this.player.root.position.z < -62) {
@@ -2295,6 +2324,17 @@ export class GameWorld {
       this.announcement = "ボスがあらわれた！";
       this.pushEvent("ボスがあらわれた！");
       this.playDungeonCue("boss");
+    } else if (this.dungeonArea === 4) {
+      this.updateWideRuinsDepthSites();
+      this.ruinsDepthRescueTimer += delta;
+      if (this.ruinsDepthRescueTimer >= 45) {
+        this.explorationTokens = this.explorationGoal;
+        this.dungeonObjective = "最深部への道がひらいた！";
+        this.announcement = "遠くの遺跡が光った！ ボスへの道がひらいた！";
+        this.openDungeonDoor(-72);
+        this.pushEvent(this.announcement);
+        this.playDungeonCue("door");
+      }
     } else if (this.dungeonArea === 5 && this.boss && !this.boss.alive && !this.dungeonChest) {
       this.dungeonArea = 6;
       this.dungeonChest = true;
