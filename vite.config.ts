@@ -174,9 +174,9 @@ function vitePluginBabylonShaderFallback(): Plugin {
       server.middlewares.use("/Shaders", (req, res, next) => {
         const shaderPath = (req.url ?? "").split("?")[0];
         const source =
-          shaderPath === "/postprocess.vertex.fx"
+          shaderPath.endsWith(".vertex.fx")
             ? BABYLON_POSTPROCESS_VERTEX
-            : shaderPath === "/imageProcessing.fragment.fx"
+            : shaderPath.endsWith(".fragment.fx")
               ? BABYLON_POSTPROCESS_FRAGMENT
               : null;
 

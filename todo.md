@@ -486,4 +486,11 @@
 - [x] `postprocess`頂点と未登録フラグメントの要求URLをBabylonのソースと照合する
 - [x] `/Shaders/`配下へ必要なBabylon GLSLを静的配置し、SPAのHTMLフォールバックを回避する
 - [x] `?from_webdev=1`とシェーダーURLのHTTP応答を確認し、コンソール無エラーを検証する
-- [ ] フォールバック修正版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
+- [x] フォールバック修正版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
+
+## Babylon FX 全要求フォールバック
+
+- [x] 最新ログの未特定postprocess要求と、既存の限定フォールバック範囲を照合する
+- [x] `/Shaders/`配下の任意の`.vertex.fx`・`.fragment.fx`へ有効な汎用GLSLを返すよう拡張する
+- [x] 複数の旧FX URLと`?from_webdev=1`でHTML誤読が発生しないことを確認する
+- [ ] 完全フォールバック版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
