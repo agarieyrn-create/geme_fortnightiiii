@@ -1,5 +1,7 @@
 export type TutorialKey = "move" | "look" | "aimFire" | "pickup" | "jump" | "caveSwitch";
 export type GraphicsQuality = "light" | "standard" | "pretty";
+export type Difficulty = "easy" | "normal";
+export type AimAssistStrength = "weak" | "standard" | "strong";
 
 export type ProgressionData = {
   coins: number;
@@ -17,6 +19,9 @@ export type ProgressionData = {
   sfxVolume: number;
   bgmVolume: number;
   graphicsQuality: GraphicsQuality;
+  difficulty: Difficulty;
+  aimAssistEnabled: boolean;
+  aimAssistStrength: AimAssistStrength;
   tutorialSeen: Record<TutorialKey, boolean>;
 };
 
@@ -36,6 +41,9 @@ export const DEFAULT_PROGRESSION: ProgressionData = {
   sfxVolume: 0.7,
   bgmVolume: 0.5,
   graphicsQuality: "standard",
+  difficulty: "easy",
+  aimAssistEnabled: true,
+  aimAssistStrength: "standard",
   tutorialSeen: { move: false, look: false, aimFire: false, pickup: false, jump: false, caveSwitch: false },
 };
 
@@ -47,7 +55,9 @@ export function loadProgression(): ProgressionData {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<ProgressionData> | null;
     const data = { ...DEFAULT_PROGRESSION, ...(parsed ?? {}) };
     const graphicsQuality: GraphicsQuality = data.graphicsQuality === "light" || data.graphicsQuality === "pretty" || data.graphicsQuality === "standard" ? data.graphicsQuality : "standard";
-    return { ...data, graphicsQuality, ruinsCleared: Boolean(data.ruinsCleared || data.clears > 0), forestUnlocked: Boolean(data.forestUnlocked || data.clears > 0), caveUnlocked: Boolean(data.caveUnlocked || data.forestClears > 0) };
+    const difficulty: Difficulty = data.difficulty === "normal" ? "normal" : "easy";
+    const aimAssistStrength: AimAssistStrength = data.aimAssistStrength === "weak" || data.aimAssistStrength === "strong" || data.aimAssistStrength === "standard" ? data.aimAssistStrength : "standard";
+    return { ...data, graphicsQuality, difficulty, aimAssistEnabled: data.aimAssistEnabled !== false, aimAssistStrength, ruinsCleared: Boolean(data.ruinsCleared || data.clears > 0), forestUnlocked: Boolean(data.forestUnlocked || data.clears > 0), caveUnlocked: Boolean(data.caveUnlocked || data.forestClears > 0) };
   } catch {
     return DEFAULT_PROGRESSION;
   }
@@ -87,9 +97,10 @@ export function getStrength(data: ProgressionData) {
 }
 
 export function getPlayerStats(data: ProgressionData) {
+  const easyMultiplier = data.difficulty === "easy" ? 2.35 : 1;
   return {
-    maxHp: 300 + (data.hpLevel - 1) * 20,
-    damage: 25 * (1 + (data.attackLevel - 1) * 0.1),
+    maxHp: (data.difficulty === "easy" ? 500 : 300) + (data.hpLevel - 1) * 20,
+    damage: 25 * easyMultiplier * (1 + (data.attackLevel - 1) * 0.1),
     reloadTime: 0.82 * Math.max(0.6, 1 - (data.reloadLevel - 1) * 0.1),
   };
 }

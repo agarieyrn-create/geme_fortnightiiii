@@ -10,6 +10,7 @@ export class CameraController {
   private readonly forwardVector = new Vector3();
   private recoil = 0;
   private autoFocusTarget?: Vector3;
+  private autoFocusStrength = 0;
 
   constructor(readonly camera: UniversalCamera, private readonly obstacles: CameraObstacle[]) {
     camera.minZ = 0.05;
@@ -27,20 +28,21 @@ export class CameraController {
     this.yaw = nextYaw;
   }
 
-  setAutoFocusTarget(target?: Vector3) {
+  setAutoFocusTarget(target?: Vector3, strength = 0) {
     this.autoFocusTarget = target?.clone();
+    this.autoFocusStrength = strength;
   }
 
   applyAutoFocus(delta: number, targetPosition: Vector3) {
-    if (!this.autoFocusTarget) return false;
+    if (!this.autoFocusTarget || this.autoFocusStrength <= 0) return false;
     const toTarget = this.autoFocusTarget.subtract(targetPosition);
     const horizontalDistance = Math.hypot(toTarget.x, toTarget.z);
     if (horizontalDistance < 0.01) return false;
     const desiredYaw = Math.atan2(toTarget.x, toTarget.z);
     const yawDelta = Math.atan2(Math.sin(desiredYaw - this.yaw), Math.cos(desiredYaw - this.yaw));
-    this.yaw += yawDelta * Math.min(1, delta * 4.2);
+    this.yaw += yawDelta * Math.min(1, delta * 4.2 * this.autoFocusStrength);
     const desiredPitch = Math.max(-1.05, Math.min(1.22, Math.atan2(toTarget.y - 1.18, horizontalDistance) / 4.4));
-    this.pitch += (desiredPitch - this.pitch) * Math.min(1, delta * 3.4);
+    this.pitch += (desiredPitch - this.pitch) * Math.min(1, delta * 3.4 * this.autoFocusStrength);
     return true;
   }
 

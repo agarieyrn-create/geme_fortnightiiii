@@ -9,6 +9,8 @@ import type { DungeonId } from "./DungeonConfig";
 export type GameHandle = {
   scene: Scene;
   start: () => void;
+  pause: () => void;
+  resume: () => void;
   returnToBriefing: () => void;
   setAvatar: (avatarId: string) => void;
   dispose: () => void;
@@ -27,6 +29,8 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement,
   return {
     scene,
     start: () => world.start(),
+    pause: () => world.pause(),
+    resume: () => world.resume(),
     returnToBriefing: () => world.returnToBriefing(),
     setAvatar: (avatarId) => world.setPlayerAvatar(avatarId),
     dispose: () => {

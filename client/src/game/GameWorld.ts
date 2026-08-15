@@ -37,21 +37,19 @@ const SAND = new Color3(0.31, 0.12, 0.035);
 const BASALT = new Color3(0.12, 0.055, 0.023);
 const RUST = new Color3(0.77, 0.16, 0.1);
 
-const EASY_MODE = true;
-const PLAYER_MAX_HP = EASY_MODE ? 500 : 300;
-const ENEMY_MAX_HP = EASY_MODE ? 50 : 100;
+const PLAYER_MAX_HP = 300;
+const ENEMY_MAX_HP = 100;
 const PLAYER_WEAPON_RANGE = 500;
 const PLAYER_WEAPON_DAMAGE = 25;
 const PICKUP_RANGE = 3.2;
-const MEDKIT_HEAL = EASY_MODE ? 220 : 50;
+const MEDKIT_HEAL = 50;
 const MEDKIT_USE_TIME = 3;
 const ENEMY_ATTACK_RANGE = 25;
-const ENEMY_ATTACK_DAMAGE = EASY_MODE ? 2 : 10;
-const ENEMY_ATTACK_INTERVAL = EASY_MODE ? 2.35 : 1.15;
+const ENEMY_ATTACK_DAMAGE = 10;
+const ENEMY_ATTACK_INTERVAL = 1.15;
 // Test-only toggle: set false to restore the intended no-weapon scavenger start.
 const DEBUG_START_WITH_WEAPON = true;
 
-const easyDamage = (amount: number) => EASY_MODE ? Math.max(1, Math.round(amount * 0.25)) : amount;
 
 const CHARACTER_LOADOUTS: Record<string, { suit: Color3; armor: Color3; accent: Color3; cloak: Color3; scale: number }> = {
   kairo: { suit: new Color3(0.14, 0.18, 0.23), armor: new Color3(0.39, 0.29, 0.18), accent: TEAL, cloak: new Color3(0.34, 0.25, 0.15), scale: 1 },
@@ -442,22 +440,22 @@ class Rival extends Combatant {
   setStyle(style: "normal" | "melee" | "ranged" | "shield" | "forestBoss" | "caveBoss") {
     this.style = style;
     if (style === "melee") {
-      this.attackDamage = EASY_MODE ? 3 : 12;
+      this.attackDamage = 12;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.08);
       this.addMeleeSilhouette();
     } else if (style === "ranged") {
-      this.attackDamage = EASY_MODE ? 2 : 8;
+      this.attackDamage = 8;
       this.applyLoadout("veil");
       this.root.scaling.setAll(0.92);
       this.addRangedSilhouette();
     } else if (style === "forestBoss") {
-      this.attackDamage = EASY_MODE ? 4 : 15;
+      this.attackDamage = 15;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.82);
       this.addBossSilhouette("forest");
     } else if (style === "shield") {
-      this.attackDamage = EASY_MODE ? 2 : 9;
+      this.attackDamage = 9;
       this.applyLoadout("anker");
       this.root.scaling.setAll(1.16);
       const shield = MeshBuilder.CreateDisc(`${this.id}-shield`, { radius: 0.9, tessellation: 24 }, this.scene);
@@ -471,7 +469,7 @@ class Rival extends Combatant {
       shield.material = shieldMat;
       this.addShieldSilhouette(shieldMat);
     } else if (style === "caveBoss") {
-      this.attackDamage = EASY_MODE ? 4 : 16;
+      this.attackDamage = 16;
       this.applyLoadout("anker");
       this.root.scaling.setAll(2.05);
       this.addBossSilhouette("cave");
@@ -666,7 +664,7 @@ export class GameWorld {
   private renderingPipeline?: DefaultRenderingPipeline;
   private shadowRefreshTimer = 0;
   private readonly shadowCasters = new Set<Mesh>();
-  private mode: "briefing" | "playing" | MatchOutcome = "briefing";
+  private mode: "briefing" | "playing" | "paused" | MatchOutcome = "briefing";
   private fireCooldown = 0;
   private uiTick = 0;
   private announcement = "降下を待機中";
@@ -729,6 +727,24 @@ export class GameWorld {
 
   private get isCaveDungeon() {
     return this.options.step === "step5" && this.options.dungeonId === "cave";
+  }
+
+  private get isEasyMode() {
+    return this.progression.difficulty === "easy";
+  }
+
+  private enemyMaxHp() {
+    return this.isEasyMode ? 50 : ENEMY_MAX_HP;
+  }
+
+  private scaleIncomingDamage(amount: number) {
+    return this.isEasyMode ? Math.max(1, Math.round(amount * 0.25)) : amount;
+  }
+
+  private applyDifficultyToRival(rival: Rival) {
+    rival.hp = this.enemyMaxHp();
+    rival.maxHp = this.enemyMaxHp();
+    if (this.isEasyMode) rival.attackDamage = Math.max(2, Math.round(rival.attackDamage * 0.25));
   }
 
   private configureVisualLighting() {
@@ -847,7 +863,7 @@ export class GameWorld {
     this.cameraController = new CameraController(this.camera, this.obstacles);
     this.configureRenderingPipeline();
     this.weaponSystem = new WeaponSystem();
-    this.weaponSystem.damageMultiplier = (EASY_MODE ? 2.35 : 1) * (1 + Math.max(0, this.progression.attackLevel - 1) * 0.1);
+    this.weaponSystem.damageMultiplier = (this.isEasyMode ? 2.35 : 1) * (1 + Math.max(0, this.progression.attackLevel - 1) * 0.1);
     this.weaponSystem.reloadMultiplier = Math.max(0.6, 1 - Math.max(0, this.progression.reloadLevel - 1) * 0.1);
     const startsArmed = options.step === "step3" || options.step === "full" || ((options.step === "step4" || options.step === "step5") && DEBUG_START_WITH_WEAPON);
     if (startsArmed) {
@@ -874,7 +890,7 @@ export class GameWorld {
   }
 
   returnToBriefing() {
-    if (this.mode !== "playing") return;
+    if (this.mode !== "playing" && this.mode !== "paused") return;
     this.mode = "briefing";
     this.input.reset();
     this.touchInput.reset();
@@ -882,6 +898,20 @@ export class GameWorld {
     this.currentCrouching = false;
     this.player.setAiming(false);
     this.announcement = "降下準備画面へもどったよ";
+  }
+
+  pause() {
+    if (this.mode !== "playing") return;
+    this.mode = "paused";
+    this.input.reset();
+    this.touchInput.reset();
+    this.currentAiming = false;
+    this.currentCrouching = false;
+    this.player.setAiming(false);
+  }
+
+  resume() {
+    if (this.mode === "paused") this.mode = "playing";
   }
 
   setPlayerAvatar(avatarId: string) {
@@ -894,6 +924,7 @@ export class GameWorld {
   }
 
   update(delta: number) {
+    if (this.mode === "paused") return;
     this.shadowRefreshTimer -= delta;
     if (this.shadowGenerator && this.shadowRefreshTimer <= 0) {
       this.refreshShadowCasters();
@@ -928,7 +959,7 @@ export class GameWorld {
   }
 
   private playerMaxHp() {
-    return PLAYER_MAX_HP + Math.max(0, this.progression.hpLevel - 1) * 20;
+    return (this.isEasyMode ? 500 : PLAYER_MAX_HP) + Math.max(0, this.progression.hpLevel - 1) * 20;
   }
 
   private showTutorial(key: TutorialKey, text: string, target: "move" | "look" | "aim" | "fire" | "pickup" | "jump") {
@@ -1031,7 +1062,7 @@ export class GameWorld {
         if (this.bossWarning) { this.bossWarning.dispose(); this.bossWarning = undefined; }
         const close = Vector3.DistanceSquared(this.player.root.position, this.bossWarningPosition) < 28;
         if (close && this.player.alive) {
-          const eliminated = this.debugGodMode ? false : this.player.applyDamage(easyDamage(18));
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(this.scaleIncomingDamage(18));
           this.showPlayerDamage(this.bossWarningPosition);
           this.pushEvent(this.debugGodMode ? "範囲攻撃をよけた！" : "範囲攻撃 -18 HP");
           if (eliminated) this.pushEvent("PLAYER DEAD");
@@ -1096,7 +1127,7 @@ export class GameWorld {
         this.caveBossRockMarker = undefined;
         const hit = Vector3.DistanceSquared(this.player.root.position, this.caveBossRockPosition) < 6.4;
         if (hit && this.player.alive) {
-          const eliminated = this.debugGodMode ? false : this.player.applyDamage(easyDamage(this.caveBossPhaseTwo ? 18 : 14));
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(this.scaleIncomingDamage(this.caveBossPhaseTwo ? 18 : 14));
           this.showPlayerDamage(this.caveBossRockPosition);
           this.pushEvent(this.debugGodMode ? "岩をよけた！" : "岩の攻撃を受けた！");
           if (eliminated) this.pushEvent("PLAYER DEAD");
@@ -1124,7 +1155,7 @@ export class GameWorld {
         this.boss.root.position.addInPlace(this.forestBossDashDirection.scale(7.2));
         const hit = Vector3.DistanceSquared(this.player.root.position, this.boss.root.position) < 10;
         if (hit && this.player.alive) {
-          const eliminated = this.debugGodMode ? false : this.player.applyDamage(easyDamage(16));
+          const eliminated = this.debugGodMode ? false : this.player.applyDamage(this.scaleIncomingDamage(16));
           this.showPlayerDamage(this.boss.root.position);
           this.pushEvent(this.debugGodMode ? "突進をよけた！" : "突進 -16 HP");
           if (eliminated) this.pushEvent("PLAYER DEAD");
@@ -1986,8 +2017,7 @@ export class GameWorld {
       rival.applyLoadout(index % 2 === 0 ? "rustjaw" : "veil");
       if (styles[index]) rival.setStyle(styles[index]);
       rival.shield = 0;
-      rival.hp = ENEMY_MAX_HP;
-      rival.maxHp = ENEMY_MAX_HP;
+      this.applyDifficultyToRival(rival);
       this.rivals.push(rival);
       this.dungeonWave.push(rival);
     });
@@ -2070,9 +2100,9 @@ export class GameWorld {
       boss.applyLoadout("rustjaw");
       boss.root.scaling.setAll(1.7);
       boss.shield = 0;
-      boss.hp = EASY_MODE ? 150 : 400;
-      boss.maxHp = EASY_MODE ? 150 : 400;
-      boss.attackDamage = EASY_MODE ? 4 : 14;
+      boss.hp = this.isEasyMode ? 150 : 400;
+      boss.maxHp = this.isEasyMode ? 150 : 400;
+      boss.attackDamage = this.isEasyMode ? 4 : 14;
       this.rivals.push(boss);
       this.boss = boss;
       this.dungeonWave = [boss];
@@ -2143,9 +2173,10 @@ export class GameWorld {
       if (z >= -74) return;
       const boss = new Rival(this.scene, "gorum", new Vector3(0, 0, -86));
       boss.setStyle("caveBoss");
+      this.applyDifficultyToRival(boss);
       boss.shield = 0;
-      boss.hp = EASY_MODE ? 230 : 520;
-      boss.maxHp = EASY_MODE ? 230 : 520;
+      boss.hp = this.isEasyMode ? 230 : 520;
+      boss.maxHp = this.isEasyMode ? 230 : 520;
       this.rivals.push(boss);
       this.boss = boss;
       this.dungeonWave = [boss];
@@ -2222,9 +2253,10 @@ export class GameWorld {
       if (z >= -70) return;
       const boss = new Rival(this.scene, "forest-guardian", new Vector3(0, 0, -82));
       boss.setStyle("forestBoss");
+      this.applyDifficultyToRival(boss);
       boss.shield = 0;
-      boss.hp = EASY_MODE ? 200 : 460;
-      boss.maxHp = EASY_MODE ? 200 : 460;
+      boss.hp = this.isEasyMode ? 200 : 460;
+      boss.maxHp = this.isEasyMode ? 200 : 460;
       this.rivals.push(boss);
       this.boss = boss;
       this.dungeonWave = [boss];
@@ -2275,7 +2307,7 @@ export class GameWorld {
       const loadout = ["rustjaw", "veil", "anker", "rustjaw"][index];
       rival.applyLoadout(loadout);
       rival.shield = 0;
-      rival.hp = ENEMY_MAX_HP;
+      this.applyDifficultyToRival(rival);
       this.rivals.push(rival);
     });
   }
@@ -2397,10 +2429,11 @@ export class GameWorld {
 
   private updateAutoFocusTarget(snapshot: InputSnapshot) {
     const hasManualLook = Math.abs(snapshot.lookX) + Math.abs(snapshot.lookY) > 0.45;
-    if ((!snapshot.aiming && !snapshot.firing) || hasManualLook) {
+    if (!this.progression.aimAssistEnabled || (!snapshot.aiming && !snapshot.firing) || hasManualLook) {
       this.cameraController.setAutoFocusTarget();
       return;
     }
+    const strength = this.progression.aimAssistStrength === "strong" ? 1.55 : this.progression.aimAssistStrength === "weak" ? 0.58 : 1;
     const eye = this.player.root.position.add(new Vector3(0, 1.25, 0));
     const forward = this.cameraController.forward();
     let bestTarget: Vector3 | undefined;
@@ -2419,7 +2452,7 @@ export class GameWorld {
     };
     this.rivals.forEach((rival) => { if (rival.alive) evaluate(rival.root.position, 1.25); });
     this.trainingTargets.forEach((target) => { if (target.alive) evaluate(target.root.position, 1.35); });
-    this.cameraController.setAutoFocusTarget(bestTarget);
+    this.cameraController.setAutoFocusTarget(bestTarget, strength);
   }
 
   private updatePlayerLegacy(delta: number) {
@@ -2525,9 +2558,10 @@ export class GameWorld {
           }
         }
       } else if (this.player.alive && Vector3.DistanceSquared(projectile.mesh.position, this.player.root.position.add(new Vector3(0, 1, 0))) < 1.45) {
-        const eliminated = this.debugGodMode ? false : this.player.applyDamage(projectile.damage);
+        const incoming = this.scaleIncomingDamage(projectile.damage);
+        const eliminated = this.debugGodMode ? false : this.player.applyDamage(incoming);
         this.showPlayerDamage(projectile.mesh.position);
-        this.pushEvent(this.debugGodMode ? `-${projectile.damage} HP (GOD BLOCKED)` : `-${projectile.damage} HP`);
+        this.pushEvent(this.debugGodMode ? `-${incoming} HP (GOD BLOCKED)` : `-${incoming} HP`);
         if (eliminated) this.pushEvent("PLAYER DEAD");
         hit = true;
       }
@@ -2603,8 +2637,9 @@ export class GameWorld {
     this.pushEvent("回復をはじめたよ");
     window.setTimeout(() => {
       if (this.medkitTimer <= 0 && this.player.alive) {
-        this.player.hp = Math.min(this.playerMaxHp(), this.player.hp + MEDKIT_HEAL);
-        this.pushEvent(`+${MEDKIT_HEAL} HP`);
+        const healAmount = this.isEasyMode ? 220 : MEDKIT_HEAL;
+        this.player.hp = Math.min(this.playerMaxHp(), this.player.hp + healAmount);
+        this.pushEvent(`+${healAmount} HP`);
       }
     }, MEDKIT_USE_TIME * 1000);
   }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { createGameScene, type GameHandle, type MatchOutcome } from "@/game/scene";
-import { applyUpgrade, dungeonReward, getPlayerStats, getStrength, loadProgression, markTutorialSeen, resetProgression, saveProgression, type GraphicsQuality, type ProgressionData, type TutorialKey, upgradeCost } from "@/game/Progression";
+import { applyUpgrade, dungeonReward, getPlayerStats, getStrength, loadProgression, markTutorialSeen, resetProgression, saveProgression, type AimAssistStrength, type Difficulty, type GraphicsQuality, type ProgressionData, type TutorialKey, upgradeCost } from "@/game/Progression";
 import type { DungeonId } from "@/game/DungeonConfig";
 
 const LOGO_URL = "/manus-storage/stormfall-logo-fixed_bf9eea9a.png";
@@ -49,6 +49,7 @@ export default function GameCanvas() {
   const [tutorial, setTutorial] = useState<TutorialHint | null>(null);
   const tutorialTimerRef = useRef<number | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [paused, setPaused] = useState(false);
   const debugMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug");
   const [resultReward, setResultReward] = useState<{ base: number; bonus: number; total: number; coinsAfter: number } | null>(null);
   const strength = getStrength(progression);
@@ -66,8 +67,22 @@ export default function GameCanvas() {
     if (document.pointerLockElement) document.exitPointerLock();
     setOutcome(null);
     setTutorial(null);
+    setPaused(false);
     setStarted(false);
     setHubView("home");
+  };
+
+  const togglePause = () => {
+    if (!started || outcome) return;
+    if (paused) {
+      handleRef.current?.resume();
+      void canvasRef.current?.requestPointerLock?.();
+      setPaused(false);
+      return;
+    }
+    handleRef.current?.pause();
+    if (document.pointerLockElement) document.exitPointerLock();
+    setPaused(true);
   };
 
   useEffect(() => {
@@ -139,7 +154,10 @@ export default function GameCanvas() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!started || event.repeat) return;
-      if (event.key === "Escape" || event.key.toLowerCase() === "h") {
+      if (event.key === "Escape" || event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        togglePause();
+      } else if (event.key.toLowerCase() === "h") {
         event.preventDefault();
         returnToHub();
       }
@@ -170,6 +188,29 @@ export default function GameCanvas() {
     saveProgression(next);
     setHubNotice(`画質を「${graphicsQuality === "light" ? "軽い" : graphicsQuality === "pretty" ? "きれい" : "標準"}」にしたよ`);
     window.setTimeout(() => setHubNotice(""), 1500);
+  };
+
+  const updateDifficulty = (difficulty: Difficulty) => {
+    const next = { ...progression, difficulty };
+    progressionRef.current = next;
+    setProgression(next);
+    saveProgression(next);
+    setHubNotice(difficulty === "easy" ? "イージーモードにしたよ！" : "ふつうモードにしたよ！");
+    window.setTimeout(() => setHubNotice(""), 1500);
+  };
+
+  const updateAimAssist = (aimAssistEnabled: boolean) => {
+    const next = { ...progression, aimAssistEnabled };
+    progressionRef.current = next;
+    setProgression(next);
+    saveProgression(next);
+  };
+
+  const updateAimAssistStrength = (aimAssistStrength: AimAssistStrength) => {
+    const next = { ...progression, aimAssistStrength };
+    progressionRef.current = next;
+    setProgression(next);
+    saveProgression(next);
   };
 
   const beginMatch = (dungeonId: DungeonId = "ruins") => {
@@ -207,7 +248,7 @@ export default function GameCanvas() {
         tabIndex={0}
         style={{ touchAction: "none" }}
       />
-      <div className={`touch-controls ${gameState === "playing" ? "is-playing" : "is-hidden"}`} aria-label="モバイル操作" aria-hidden={gameState !== "playing"}>
+      <div className={`touch-controls ${gameState === "playing" && !paused ? "is-playing" : "is-hidden"}`} aria-label="モバイル操作" aria-hidden={gameState !== "playing" || paused}>
         <div className={`touch-stick ${tutorial?.target === "move" ? "tutorial-focus" : ""}`} aria-hidden="true"><div id="touch-knob" className="touch-knob" /></div>
         <span className={`touch-swipe-hint ${tutorial?.target === "look" ? "tutorial-focus" : ""}`}>SWIPE TO LOOK</span>
         <div className="touch-actions">
@@ -240,7 +281,8 @@ export default function GameCanvas() {
             <span className="eyebrow">ダンジョン</span>
             <strong>{dungeonName}</strong>
           </div>
-          <button className="home-return-button" type="button" onClick={returnToHub}>ホーム <kbd>Esc</kbd></button>
+          <button className="home-return-button" type="button" onClick={returnToHub}>ホーム <kbd>H</kbd></button>
+          <button className="pause-button" type="button" onClick={togglePause}>一時停止 <kbd>P</kbd></button>
         </header>
 
         <aside className="tactical-stack" aria-label="戦術情報">
@@ -283,8 +325,10 @@ export default function GameCanvas() {
         <div className="state-chip"><span>うごき</span><strong id="motion-state">待機</strong><i id="crouch-state">立つ</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>
         <ol id="event-feed" className="event-feed" aria-label="戦闘ログ" />
-        <p className="control-strip">WASD 移動 <b>·</b> マウス ねらう／うつ <b>·</b> R リロード <b>·</b> SPACE ジャンプ <b>·</b> C しゃがむ <b>·</b> Esc／H ホーム</p>
+        <p className="control-strip">WASD 移動 <b>·</b> マウス ねらう／うつ <b>·</b> 1／2／3 武器切替 <b>·</b> R リロード <b>·</b> Esc／P 一時停止 <b>·</b> H ホーム</p>
       </div>
+
+      {paused && !outcome && <section className="pause-overlay" role="dialog" aria-modal="true" aria-label="一時停止メニュー"><div className="pause-card"><p>PAUSE // 作戦を停止中</p><h2>一時停止</h2><small>敵も時間も止まっているよ</small><div className="pause-actions"><button type="button" onClick={togglePause}>つづける <kbd>Esc</kbd></button><button type="button" onClick={returnToHub}>拠点へもどる <kbd>H</kbd></button></div><section className="how-to-play"><h3>つかいかた</h3><div className="howto-pc"><strong>PC</strong><span><b>WASD</b> 移動　<b>マウス</b> ねらう／うつ　<b>1・2・3</b> 武器をえらぶ</span><span><b>R</b> リロード　<b>SPACE</b> ジャンプ　<b>C</b> しゃがむ</span><span><b>Esc・P</b> 一時停止　<b>H</b> 拠点へもどる</span></div><div className="howto-mobile"><strong>スマホ</strong><span><b>左下</b> 移動　<b>右側をスワイプ</b> まわりを見る</span><span><b>右下</b> ねらう／うつ／ジャンプ　<b>下中央の武器</b> をタップして切替</span><span><b>右上の一時停止</b> から、つづける／拠点へもどるをえらべる</span></div><p className="weapon-help">武器は途中で近づくとひろえるよ。武器スロットの色がついたボタンをえらぶと、持ちかえられるよ。</p></section></div></section>}
 
       {!started && (
         <section className="launch-screen hub-screen" style={{ backgroundImage: `linear-gradient(90deg, rgba(3,10,22,.97) 3%, rgba(3,10,22,.76) 43%, rgba(3,10,22,.22) 100%), url(${REFERENCE_URL})` }}>
@@ -303,7 +347,7 @@ export default function GameCanvas() {
             {hubView === "dungeons" && <div className="hub-panel"><div className="power-compare">{strength >= 200 ? "楽にいけそう！" : strength >= 150 ? "ちょうどいい！" : "ちょっとむずかしいかも！"}</div><button className="dungeon-card" type="button" onClick={() => beginMatch("ruins")}><strong>はじまりの遺跡</strong><span>おすすめのつよさ　100</span><span>クリア報酬　🪙 50　／　初回　🪙 100</span><b>出発する</b></button><div className="locked-dungeons"><button type="button" className={`forest-dungeon ${progression.forestUnlocked ? "unlocked-dungeon" : ""}`} style={progression.forestUnlocked ? { backgroundImage: `linear-gradient(90deg, rgba(3,18,11,.93), rgba(3,18,11,.55)), url(${FOREST_REFERENCE_URL})` } : undefined} disabled={!progression.forestUnlocked} onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=forest`); window.location.reload(); }}><strong>{progression.forestUnlocked ? "まよいの森" : "🔒 まよいの森"}</strong><small>{progression.forestUnlocked ? "おすすめのつよさ　150　／　クリア報酬　🪙 100" : "はじまりの遺跡をクリアしよう！"}</small><b>{progression.forestUnlocked ? "出発する" : "まだ行けないよ"}</b></button><button type="button" className={`forest-dungeon cave-dungeon ${progression.caveUnlocked ? "unlocked-dungeon" : ""}`} style={progression.caveUnlocked ? { backgroundImage: `linear-gradient(90deg, rgba(12,9,19,.94), rgba(12,9,19,.56)), url(${CAVE_REFERENCE_URL})` } : undefined} disabled={!progression.caveUnlocked} onClick={() => { window.history.replaceState({}, "", `${window.location.pathname}?play=1&dungeon=cave`); window.location.reload(); }}><strong>{progression.caveUnlocked ? "くらやみの洞窟" : "🔒 くらやみの洞窟"}</strong><small>{progression.caveUnlocked ? "おすすめのつよさ　200　／　初回　🪙 200" : "まよいの森をクリアしよう！"}</small><b>{progression.caveUnlocked ? "出発する" : "まだ行けないよ"}</b></button><span>{progression.iceMountainDiscovered ? "🔒 こおりの山" : "？？？"}</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "upgrade" && <div className="hub-panel upgrade-list"><div className="strength-readout">今のつよさ　<strong>{strength}</strong></div>{([ ["hpLevel", "HPアップ", "もっと元気になる！"], ["attackLevel", "こうげき力アップ", "てきに大きなダメージ！"], ["reloadLevel", "リロードアップ", "もっと早くリロード！"] ] as const).map(([key, title, copy]) => { const next = Math.min(5, progression[key] + 1); const current = key === "hpLevel" ? `${playerStats.maxHp}` : key === "attackLevel" ? `${playerStats.damage.toFixed(1)}` : `${playerStats.reloadTime.toFixed(1)}秒`; const nextValue = key === "hpLevel" ? `${playerStats.maxHp + 20}` : key === "attackLevel" ? `${(playerStats.damage * 1.1).toFixed(1)}` : `${(playerStats.reloadTime * 0.9).toFixed(1)}秒`; return <div className="upgrade-card" key={key}><div><strong>{title}</strong><span>{copy}</span><small>Lv.{progression[key]} → Lv.{next}</small><small>{key === "hpLevel" ? "HP" : key === "attackLevel" ? "こうげき力" : "リロード時間"}　{current} → {nextValue}</small></div><button type="button" disabled={progression[key] >= 5 || progression.coins < upgradeCost(progression[key])} onClick={() => changeUpgrade(key)}>{progression[key] >= 5 ? "最大" : `${upgradeCost(progression[key])}コイン`}</button></div>})}<button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
             {hubView === "loadout" && <div className="hub-panel"><p>今つかえる武器</p><div className="loadout-list"><span>アサルトライフル</span><span>サブマシンガン</span><span>ショットガン</span></div><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
-            {hubView === "settings" && <div className="hub-panel settings-panel"><label>効果音　<input type="range" min="0" max="1" step="0.1" value={progression.sfxVolume} onChange={(event) => updateVolume("sfxVolume", Number(event.target.value))} /></label><label>BGM　<input type="range" min="0" max="1" step="0.1" value={progression.bgmVolume} onChange={(event) => updateVolume("bgmVolume", Number(event.target.value))} /></label><fieldset className="graphics-quality"><legend>画質</legend><small>スマホは「標準」がおすすめ</small><div>{([ ["light", "軽い"], ["standard", "標準"], ["pretty", "きれい"] ] as const).map(([quality, label]) => <button type="button" key={quality} className={progression.graphicsQuality === quality ? "selected" : ""} aria-pressed={progression.graphicsQuality === quality} onClick={() => updateGraphicsQuality(quality)}>{label}</button>)}</div></fieldset><button className="save-reset-button" type="button" onClick={() => setResetConfirm(true)}>セーブデータをリセット</button><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
+            {hubView === "settings" && <div className="hub-panel settings-panel"><label>効果音　<input type="range" min="0" max="1" step="0.1" value={progression.sfxVolume} onChange={(event) => updateVolume("sfxVolume", Number(event.target.value))} /></label><label>BGM　<input type="range" min="0" max="1" step="0.1" value={progression.bgmVolume} onChange={(event) => updateVolume("bgmVolume", Number(event.target.value))} /></label><fieldset className="difficulty-picker"><legend>むずかしさ</legend><small>イージーは敵が弱く、回復も大きいよ</small><div>{([ ["easy", "イージー"], ["normal", "ふつう"] ] as const).map(([difficulty, label]) => <button type="button" key={difficulty} className={progression.difficulty === difficulty ? "selected" : ""} aria-pressed={progression.difficulty === difficulty} onClick={() => updateDifficulty(difficulty)}>{label}</button>)}</div></fieldset><fieldset className="aim-assist-settings"><legend>AF照準補助</legend><small>敵や標的の近くで、ねらう・うつ時に視点を少し向けるよ</small><div><button type="button" className={progression.aimAssistEnabled ? "selected" : ""} aria-pressed={progression.aimAssistEnabled} onClick={() => updateAimAssist(true)}>ON</button><button type="button" className={!progression.aimAssistEnabled ? "selected" : ""} aria-pressed={!progression.aimAssistEnabled} onClick={() => updateAimAssist(false)}>OFF</button></div>{progression.aimAssistEnabled && <div>{([ ["weak", "弱い"], ["standard", "標準"], ["strong", "強い"] ] as const).map(([aimAssistStrength, label]) => <button type="button" key={aimAssistStrength} className={progression.aimAssistStrength === aimAssistStrength ? "selected" : ""} aria-pressed={progression.aimAssistStrength === aimAssistStrength} onClick={() => updateAimAssistStrength(aimAssistStrength)}>{label}</button>)}</div>}</fieldset><fieldset className="graphics-quality"><legend>画質</legend><small>スマホは「標準」がおすすめ</small><div>{([ ["light", "軽い"], ["standard", "標準"], ["pretty", "きれい"] ] as const).map(([quality, label]) => <button type="button" key={quality} className={progression.graphicsQuality === quality ? "selected" : ""} aria-pressed={progression.graphicsQuality === quality} onClick={() => updateGraphicsQuality(quality)}>{label}</button>)}</div></fieldset><button className="save-reset-button" type="button" onClick={() => setResetConfirm(true)}>セーブデータをリセット</button><button className="hub-back" type="button" onClick={() => setHubView("home")}>もどる</button></div>}
           </div>
           {hubView === "home" && <aside className="avatar-chooser" aria-label="キャラクター選択"><div className="chooser-heading"><span>PLAYER</span><strong>キャラクターを選択</strong></div><div className="avatar-grid">{AVATARS.map((option) => <button key={option.id} type="button" className={`avatar-card ${avatar === option.id ? "selected" : ""}`} onClick={() => selectAvatar(option.id)} aria-pressed={avatar === option.id}><img src={option.image} alt={`${option.name} の3Dアバター`} /><span>{option.name}</span><small>{option.role}</small></button>)}</div></aside>}
         </section>
