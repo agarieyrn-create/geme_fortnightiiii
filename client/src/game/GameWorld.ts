@@ -2160,12 +2160,14 @@ export class GameWorld {
       this.beginExploration(3, "古代のしるし");
       this.announcement = "クリア！ 次の部屋へ進もう！";
       this.openDungeonDoor(6);
-      this.createDungeonPickup(new Vector3(-5.2, 0.75, -4), "rune", "古代のしるし 1");
-      this.createDungeonPickup(new Vector3(5.2, 0.75, -7.6), "rune", "古代のしるし 2");
-      this.createDungeonPickup(new Vector3(0, 0.75, -9.4), "rune", "古代のしるし 3");
-      this.createDungeonPickup(new Vector3(-5.8, 0.75, -8.6), "med", "迷路の回復キット", 1);
-      this.createDungeonPickup(new Vector3(5.8, 0.75, -9.2), "secret", "古代の小さな宝箱", 25);
-      this.createDungeonPickup(new Vector3(-4.2, 0.75, -3.8), "weapon", "サブマシンガン", undefined, undefined, "smg");
+      // Main route: simply advancing through the room finds one required marker
+      // at a time. Optional equipment and rewards sit on clear side detours.
+      this.createDungeonPickup(new Vector3(0, 0.75, -3.1), "rune", "古代のしるし 1");
+      this.createDungeonPickup(new Vector3(0.7, 0.75, -6.8), "rune", "古代のしるし 2");
+      this.createDungeonPickup(new Vector3(-0.5, 0.75, -10.2), "rune", "古代のしるし 3");
+      this.createDungeonPickup(new Vector3(-5.8, 0.75, -2.4), "weapon", "サブマシンガン", undefined, undefined, "smg");
+      this.createDungeonPickup(new Vector3(-5.8, 0.75, -7.8), "med", "迷路の回復キット", 1);
+      this.createDungeonPickup(new Vector3(5.8, 0.75, -8.6), "secret", "古代の小さな宝箱", 25);
       this.dungeonTransition = 1.2;
       this.pushEvent("次の部屋へ進もう！");
       this.playDungeonCue("clear");
