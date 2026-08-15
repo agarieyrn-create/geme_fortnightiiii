@@ -30,6 +30,12 @@ type AvatarId = (typeof AVATARS)[number]["id"];
 type TutorialHint = { text: string; target: "move" | "look" | "aim" | "fire" | "pickup" | "jump" };
 type PowerPulse = { before: number; after: number; gained: number; token: number };
 
+// Babylon scenes retain WebGL programs outside React's state. During Vite development,
+// reload once after a GameCanvas update so an old scene cannot keep lazy shader effects alive.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => window.location.reload());
+}
+
 export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const startedRef = useRef(false);
