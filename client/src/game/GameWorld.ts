@@ -74,7 +74,7 @@ type Projectile = {
 
 type Pickup = {
   root: TransformNode;
-  type: "weapon" | "ammo" | "shield" | "med" | "key" | "chest" | "secret";
+  type: "weapon" | "ammo" | "shield" | "med" | "key" | "rune" | "chest" | "secret";
   weaponId?: import("./contracts").WeaponId;
   ammoType?: "medium" | "light" | "shells";
   label: string;
@@ -692,6 +692,9 @@ export class GameWorld {
   private dungeonArea = 1;
   private dungeonTransition = 0;
   private dungeonKey = false;
+  private explorationTokens = 0;
+  private explorationGoal = 0;
+  private explorationLabel = "";
   private dungeonChest = false;
   private dungeonStartedAt = 0;
   private boss?: Rival;
@@ -1487,6 +1490,9 @@ export class GameWorld {
     this.createCaveMover(new Vector3(0, 1.2, 0), 0);
     this.createCaveSwitch(new Vector3(-6, 0, -3), 0);
     this.createCaveSwitch(new Vector3(6, 0, -7), 1);
+    this.createExplorationWall("cave-left-turn", new Vector3(-7.4, 0, -1), 1.1, 7.5, new Color3(0.1, 0.08, 0.16));
+    this.createExplorationWall("cave-right-turn", new Vector3(7.4, 0, -7), 1.1, 7.5, new Color3(0.1, 0.08, 0.16));
+    this.createExplorationWall("cave-deep-turn", new Vector3(0, 0, -17), 7.2, 1.1, new Color3(0.1, 0.08, 0.16));
     this.dungeonObjective = "洞窟のおくへ進もう！";
     this.dungeonWaveActive = false;
   }
@@ -1538,10 +1544,10 @@ export class GameWorld {
     });
     this.playDungeonCue("key");
     if (this.caveSwitchesOn < 2) {
-      this.dungeonObjective = "スイッチを2つさがそう！ あと1つ！";
+      this.dungeonObjective = this.explorationComplete() ? "スイッチを2つさがそう！ あと1つ！" : `${this.explorationLabel} をあと ${this.explorationGoal - this.explorationTokens}こ見つけよう！`;
       this.announcement = "できた！ あと1つ！";
     } else {
-      this.dungeonObjective = "扉がひらいた！ 先へ進もう！";
+      this.dungeonObjective = this.explorationComplete() ? "扉がひらいた！ 先へ進もう！" : `${this.explorationLabel} をあと ${this.explorationGoal - this.explorationTokens}こ見つけよう！`;
       this.announcement = "扉がひらいた！";
       this.openDungeonDoor(-10);
       this.playDungeonCue("door");
@@ -1714,6 +1720,9 @@ export class GameWorld {
     this.createDungeonDoor(6);
     this.createDungeonDoor(-38);
     this.createDungeonDoor(-70);
+    this.createExplorationWall("forest-left-turn", new Vector3(-7.7, 0, -10), 1.2, 7.5, new Color3(0.08, 0.24, 0.09));
+    this.createExplorationWall("forest-right-turn", new Vector3(7.7, 0, -16), 1.2, 7.5, new Color3(0.08, 0.24, 0.09));
+    this.createExplorationWall("forest-merge", new Vector3(0, 0, -29), 6.8, 1.1, new Color3(0.08, 0.24, 0.09));
     this.dungeonObjective = "森のおくへ進もう！";
   }
 
@@ -1980,6 +1989,9 @@ export class GameWorld {
       new Vector3(6, 0, 18),
       new Vector3(0, 0, 10),
     ], "area1");
+    this.createExplorationWall("ruins-a", new Vector3(-6.5, 0, -1), 5.8, 1.1, new Color3(0.23, 0.25, 0.22));
+    this.createExplorationWall("ruins-b", new Vector3(6.5, 0, -7), 5.8, 1.1, new Color3(0.23, 0.25, 0.22));
+    this.createExplorationWall("ruins-c", new Vector3(0, 0, -17), 8.5, 1.1, new Color3(0.23, 0.25, 0.22));
     this.dungeonObjective = "敵を3体たおそう！";
   }
 
@@ -2027,7 +2039,7 @@ export class GameWorld {
     const root = new TransformNode(`dungeon-pickup-${type}-${this.pickups.length}`, this.scene);
     root.position.copyFrom(position);
     const material = new StandardMaterial(`dungeon-pickup-material-${this.pickups.length}`, this.scene);
-    material.diffuseColor = type === "weapon" ? (weaponId === "shotgun" ? AMBER : weaponId === "smg" ? TEAL : new Color3(0.38, 0.68, 0.9)) : type === "key" ? AMBER : type === "chest" ? new Color3(0.8, 0.45, 0.12) : type === "secret" ? new Color3(0.2, 0.82, 0.36) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
+    material.diffuseColor = type === "weapon" ? (weaponId === "shotgun" ? AMBER : weaponId === "smg" ? TEAL : new Color3(0.38, 0.68, 0.9)) : type === "key" || type === "rune" ? AMBER : type === "chest" ? new Color3(0.8, 0.45, 0.12) : type === "secret" ? new Color3(0.2, 0.82, 0.36) : type === "med" ? new Color3(0.86, 0.22, 0.22) : new Color3(0.7, 0.64, 0.22);
     material.emissiveColor = material.diffuseColor.scale(0.35);
     const base = MeshBuilder.CreateBox(`dungeon-pickup-base-${this.pickups.length}`, { width: type === "chest" ? 1.6 : 0.72, height: type === "chest" ? 0.9 : 0.5, depth: type === "chest" ? 1.0 : 0.62 }, this.scene);
     base.parent = root;
@@ -2048,6 +2060,29 @@ export class GameWorld {
     this.pickups.push({ root, type, label, amount, ammoType, weaponId, collected: false });
   }
 
+  private beginExploration(goal: number, label: string) {
+    this.explorationTokens = 0;
+    this.explorationGoal = goal;
+    this.explorationLabel = label;
+    this.dungeonObjective = `${label} を ${goal}こ見つけよう！`;
+  }
+
+  private explorationComplete() {
+    return this.explorationGoal === 0 || this.explorationTokens >= this.explorationGoal;
+  }
+
+  private createExplorationWall(id: string, position: Vector3, width: number, depth: number, color: Color3) {
+    const wall = MeshBuilder.CreateBox(`explore-wall-${id}`, { width, height: 2.4, depth }, this.scene);
+    wall.position.copyFrom(position);
+    wall.position.y = 1.2;
+    const material = new StandardMaterial(`explore-wall-mat-${id}`, this.scene);
+    material.diffuseColor = color;
+    material.emissiveColor = color.scale(0.035);
+    material.specularColor = Color3.Black();
+    wall.material = material;
+    this.obstacles.push({ position: position.clone(), radius: Math.max(width, depth) * 0.52 });
+  }
+
   private updateDungeonProgress(delta: number) {
     if (this.options.step !== "step5") return;
     if (this.isCaveDungeon) {
@@ -2064,15 +2099,19 @@ export class GameWorld {
     }
     if (this.dungeonArea === 1 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
       this.dungeonArea = 2;
-      this.dungeonObjective = "カギを見つけよう！";
+      this.beginExploration(3, "古代のしるし");
       this.announcement = "クリア！ 次の部屋へ進もう！";
       this.openDungeonDoor(6);
-      this.createDungeonPickup(new Vector3(0, 0.75, -4), "key", "カギ");
+      this.createDungeonPickup(new Vector3(-8.8, 0.75, -4), "rune", "古代のしるし 1");
+      this.createDungeonPickup(new Vector3(8.8, 0.75, -10), "rune", "古代のしるし 2");
+      this.createDungeonPickup(new Vector3(0, 0.75, -20), "rune", "古代のしるし 3");
+      this.createDungeonPickup(new Vector3(-11.5, 0.75, -15), "med", "迷路の回復キット", 1);
+      this.createDungeonPickup(new Vector3(11.5, 0.75, -17), "secret", "古代の小さな宝箱", 25);
       this.createDungeonPickup(new Vector3(-4.2, 0.75, -3.8), "weapon", "サブマシンガン", undefined, undefined, "smg");
       this.dungeonTransition = 1.2;
       this.pushEvent("次の部屋へ進もう！");
       this.playDungeonCue("clear");
-    } else if (this.dungeonArea === 2 && this.dungeonKey) {
+    } else if (this.dungeonArea === 2 && this.dungeonKey && this.explorationComplete()) {
       this.dungeonArea = 3;
       this.dungeonObjective = "敵をぜんぶたおそう！";
       this.openDungeonDoor(-12);
@@ -2085,15 +2124,19 @@ export class GameWorld {
       this.playDungeonCue("spawn");
     } else if (this.dungeonArea === 3 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
       this.dungeonArea = 4;
-      this.dungeonObjective = "ボス部屋へ進もう！";
+      this.beginExploration(3, "最深部の石版");
       this.openDungeonDoor(-42);
       this.createDungeonPickup(new Vector3(-4, 0.75, -50), "ammo", "弾薬", 60, "medium");
       this.createDungeonPickup(new Vector3(4, 0.75, -50), "med", "回復キット", 1);
       this.createDungeonPickup(new Vector3(7.2, 0.75, -50), "weapon", "ショットガン", undefined, undefined, "shotgun");
+      this.createDungeonPickup(new Vector3(-11.5, 0.75, -48), "rune", "最深部の石版 1");
+      this.createDungeonPickup(new Vector3(11.5, 0.75, -57), "rune", "最深部の石版 2");
+      this.createDungeonPickup(new Vector3(0, 0.75, -65), "rune", "最深部の石版 3");
+      this.createDungeonPickup(new Vector3(-12, 0.75, -61), "secret", "崩れた宝物庫", 25);
       this.dungeonTransition = 1.2;
       this.pushEvent("ボスへの道がひらいた！");
       this.playDungeonCue("clear");
-    } else if (this.dungeonArea === 4 && this.player.root.position.z < -62) {
+    } else if (this.dungeonArea === 4 && this.explorationComplete() && this.player.root.position.z < -62) {
       this.openDungeonDoor(-72);
       if (this.player.root.position.z >= -70) return;
       const boss = new Rival(this.scene, "boss", new Vector3(0, 0, -78));
@@ -2145,11 +2188,16 @@ export class GameWorld {
       this.playDungeonCue("clear");
     } else if (this.dungeonArea === 2 && z < 9) {
       this.dungeonArea = 3;
-      this.dungeonObjective = "スイッチを2つさがそう！";
-      this.announcement = "スイッチを2つさがそう！";
+      this.beginExploration(3, "光る鉱石");
+      this.announcement = "光る鉱石とスイッチをさがそう！";
+      this.createDungeonPickup(new Vector3(-10.5, 0.75, 2), "rune", "光る鉱石 1");
+      this.createDungeonPickup(new Vector3(10.5, 0.75, -5), "rune", "光る鉱石 2");
+      this.createDungeonPickup(new Vector3(0, 0.75, -20), "rune", "光る鉱石 3");
+      this.createDungeonPickup(new Vector3(-11.5, 0.75, -10), "med", "洞窟の回復キット", 1);
+      this.createDungeonPickup(new Vector3(11.5, 0.75, -15), "secret", "鉱石の小さな報酬", 25);
       this.pushEvent("近づいたら、おしてみよう！");
       this.playDungeonCue("key");
-    } else if (this.dungeonArea === 3 && this.caveSwitchesOn >= 2) {
+    } else if (this.dungeonArea === 3 && this.caveSwitchesOn >= 2 && this.explorationComplete()) {
       this.dungeonArea = 4;
       this.dungeonWaveActive = false;
       this.dungeonObjective = "強い敵をたおそう！";
@@ -2161,14 +2209,18 @@ export class GameWorld {
       this.playDungeonCue("spawn");
     } else if (this.dungeonArea === 4 && this.dungeonWaveActive && waveCleared) {
       this.dungeonArea = 5;
-      this.dungeonObjective = "ボス前でじゅんびしよう！";
+      this.beginExploration(3, "深層の鉱石");
       this.announcement = "クリア！ ボスへの道がひらいた！";
       this.openDungeonDoor(-42);
       this.createDungeonPickup(new Vector3(-3, 0.75, -55), "ammo", "弾薬", 100, "medium");
       this.createDungeonPickup(new Vector3(3, 0.75, -55), "med", "回復キット", 2);
       this.createDungeonPickup(new Vector3(6.6, 0.75, -55), "weapon", "ショットガン", undefined, undefined, "shotgun");
+      this.createDungeonPickup(new Vector3(-10.5, 0.75, -45), "rune", "深層の鉱石 1");
+      this.createDungeonPickup(new Vector3(10.5, 0.75, -56), "rune", "深層の鉱石 2");
+      this.createDungeonPickup(new Vector3(0, 0.75, -67), "rune", "深層の鉱石 3");
+      this.createDungeonPickup(new Vector3(11, 0.75, -62), "secret", "深層の小さな報酬", 25);
       this.playDungeonCue("clear");
-    } else if (this.dungeonArea === 5 && z < -66) {
+    } else if (this.dungeonArea === 5 && this.explorationComplete() && z < -66) {
       this.openDungeonDoor(-74);
       if (z >= -74) return;
       const boss = new Rival(this.scene, "gorum", new Vector3(0, 0, -86));
@@ -2222,19 +2274,27 @@ export class GameWorld {
     } else if (this.dungeonArea === 2 && !this.forestRoute && z < 1) {
       this.forestRoute = this.player.root.position.x < 0 ? "left" : "right";
       this.dungeonWaveActive = true;
-      this.dungeonObjective = "敵をたおして合流しよう！";
+      this.beginExploration(3, "森のひかり");
       if (this.forestRoute === "left") {
         this.createDungeonPickup(new Vector3(-5, 0.75, -15), "med", "回復キット", 1);
+        this.createDungeonPickup(new Vector3(-10.5, 0.75, -8), "rune", "森のひかり 1");
+        this.createDungeonPickup(new Vector3(-11, 0.75, -18), "rune", "森のひかり 2");
+        this.createDungeonPickup(new Vector3(-4, 0.75, -27), "rune", "森のひかり 3");
+        this.createDungeonPickup(new Vector3(-12, 0.75, -24), "secret", "木のうろの報酬", 25);
         this.spawnDungeonWave([new Vector3(-5, 0, -10), new Vector3(-4, 0, -20)], "forest-left", ["melee", "ranged"]);
         this.announcement = "左の道　回復を見つけよう！";
       } else {
         this.createDungeonPickup(new Vector3(6, 0.75, -20), "secret", "隠し宝箱", 50);
+        this.createDungeonPickup(new Vector3(10.5, 0.75, -8), "rune", "森のひかり 1");
+        this.createDungeonPickup(new Vector3(11, 0.75, -18), "rune", "森のひかり 2");
+        this.createDungeonPickup(new Vector3(4, 0.75, -27), "rune", "森のひかり 3");
+        this.createDungeonPickup(new Vector3(12, 0.75, -24), "med", "木かげの回復", 1);
         this.spawnDungeonWave([new Vector3(5, 0, -9), new Vector3(6, 0, -16), new Vector3(4, 0, -24)], "forest-right", ["ranged", "melee", "ranged"]);
         this.announcement = "右の道　宝箱を探そう！";
       }
       this.pushEvent(this.announcement);
       this.playDungeonCue("spawn");
-    } else if (this.dungeonArea === 2 && this.dungeonWaveActive && waveCleared) {
+    } else if (this.dungeonArea === 2 && this.dungeonWaveActive && waveCleared && this.explorationComplete()) {
       this.dungeonArea = 3;
       this.dungeonObjective = "合流地点へ進もう！";
       this.announcement = "クリア！ 合流地点へ進もう！";
@@ -2242,13 +2302,17 @@ export class GameWorld {
       this.playDungeonCue("clear");
     } else if (this.dungeonArea === 3 && z < -28) {
       this.dungeonArea = 4;
-      this.dungeonObjective = "ボス前でじゅんびしよう！";
+      this.beginExploration(3, "森の道しるべ");
       this.openDungeonDoor(-38);
       this.createDungeonPickup(new Vector3(-3, 0.75, -48), "ammo", "弾薬", 80, "medium");
       this.createDungeonPickup(new Vector3(3, 0.75, -48), "med", "回復キット", 1);
+      this.createDungeonPickup(new Vector3(-11, 0.75, -39), "rune", "森の道しるべ 1");
+      this.createDungeonPickup(new Vector3(11, 0.75, -50), "rune", "森の道しるべ 2");
+      this.createDungeonPickup(new Vector3(0, 0.75, -61), "rune", "森の道しるべ 3");
+      this.createDungeonPickup(new Vector3(-12, 0.75, -57), "secret", "木立の小さな報酬", 25);
       this.announcement = "ボス前の補給だよ！";
       this.playDungeonCue("door");
-    } else if (this.dungeonArea === 4 && z < -61) {
+    } else if (this.dungeonArea === 4 && this.explorationComplete() && z < -61) {
       this.openDungeonDoor(-70);
       if (z >= -70) return;
       const boss = new Rival(this.scene, "forest-guardian", new Vector3(0, 0, -82));
@@ -2288,8 +2352,8 @@ export class GameWorld {
     if (this.isForestDungeon || this.isCaveDungeon) return;
     const z = this.player.root.position.z;
     if (this.dungeonArea === 2 && z < 2) {
-      this.dungeonObjective = this.dungeonKey ? "次の部屋へ進もう！" : "カギを見つけよう！";
-      this.announcement = "エリア2　カギを見つけよう！";
+      this.dungeonObjective = this.explorationComplete() ? "しるしがそろった！ 次の部屋へ進もう！" : `${this.explorationLabel} をあと ${this.explorationGoal - this.explorationTokens}こ見つけよう！`;
+      this.announcement = "エリア2　迷路のしるしをさがそう！";
     } else if (this.dungeonArea === 3 && z < -18) {
       this.dungeonObjective = "敵をぜんぶたおそう！";
       this.announcement = "エリア3　敵をぜんぶたおそう！";
@@ -2598,6 +2662,18 @@ export class GameWorld {
       this.playDungeonCue("key");
       this.dungeonObjective = "カギを手に入れた！ 次の部屋へ進もう！";
       this.announcement = "カギを手に入れた！";
+    } else if (pickup.type === "rune") {
+      this.explorationTokens += 1;
+      const remaining = Math.max(0, this.explorationGoal - this.explorationTokens);
+      this.playDungeonCue("key");
+      if (remaining === 0) {
+        this.dungeonKey = true;
+        this.dungeonObjective = "しるしがそろった！ 次の部屋へ進もう！";
+        this.announcement = `${this.explorationLabel} がそろった！`;
+      } else {
+        this.dungeonObjective = `${this.explorationLabel} をあと ${remaining}こ見つけよう！`;
+        this.announcement = `${pickup.label} を見つけた！`;
+      }
     } else if (pickup.type === "chest") {
       this.announcement = this.isCaveDungeon ? "洞窟の宝箱をあけた！ コイン +50" : this.isForestDungeon ? "森の報酬を手に入れた！" : "コイン ×100　回復　弾薬";
       this.playDungeonCue("chest");
@@ -2756,7 +2832,8 @@ export class GameWorld {
   }
 
   private updateHud(_force = false) {
-    const zone = this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `${this.isCaveDungeon ? "洞窟" : this.isForestDungeon ? "森" : "遺跡"} エリア${Math.min(this.isCaveDungeon ? 6 : 5, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`;
+    const explorationStatus = this.options.step === "step5" && this.explorationGoal > 0 && !this.explorationComplete() ? ` ・ 探索 ${this.explorationTokens}/${this.explorationGoal}` : "";
+    const zone = (this.options.step === "step1" ? "STEP 1 // EXPLORE" : this.options.step === "step2" ? "STEP 2 // LIVE FIRE" : this.options.step === "step3" ? "STEP 3 // HOSTILES" : this.options.step === "step4" ? "STEP 4 // SCAVENGE" : this.options.step === "step5" ? `${this.isCaveDungeon ? "洞窟" : this.isForestDungeon ? "森" : "遺跡"} エリア${Math.min(this.isCaveDungeon ? 6 : 5, this.dungeonArea)}` : this.mode === "briefing" ? "嵐を追跡中" : `収束 ${Math.max(0, Math.ceil((this.stormRadius - 25) / 0.43)).toString().padStart(2, "0")}s`) + explorationStatus;
     this.hudController.render({
       hp: this.player.hp,
       maxHp: this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5" ? this.playerMaxHp() : 100,
