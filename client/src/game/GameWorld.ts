@@ -693,6 +693,7 @@ export class GameWorld {
   private dungeonArea = 1;
   private dungeonTransition = 0;
   private dungeonKey = false;
+  private ruinsRescueTimer = 0;
   private explorationTokens = 0;
   private explorationGoal = 0;
   private explorationLabel = "";
@@ -2180,6 +2181,17 @@ export class GameWorld {
       this.dungeonTransition = 1.2;
       this.pushEvent("エリア3へ進もう！");
       this.playDungeonCue("spawn");
+    } else if (this.dungeonArea === 2) {
+      this.ruinsRescueTimer += delta;
+      if (this.ruinsRescueTimer >= 6) {
+        this.dungeonKey = true;
+        this.explorationTokens = this.explorationGoal;
+        this.dungeonObjective = "道がひらいた！ エリア3へ進もう！";
+        this.announcement = "しるしの道しるべが光った！ 扉がひらいた！";
+        this.openDungeonDoor(-12);
+        this.pushEvent(this.announcement);
+        this.playDungeonCue("door");
+      }
     } else if (this.dungeonArea === 3 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
       this.dungeonArea = 4;
       this.beginExploration(3, "最深部の石版");
