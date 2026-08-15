@@ -16,6 +16,23 @@ const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
 const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
 const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6); // Trim to 60% to avoid constant re-trimming
 
+// A stale Babylon development preview may lazily request these .fx source files.
+// Without this middleware Vite's SPA fallback returns index.html, which WebGL then
+// attempts to compile as GLSL.
+const BABYLON_POSTPROCESS_VERTEX = `attribute vec2 position;
+uniform vec2 scale;
+varying vec2 vUV;
+void main(void) {
+  vUV = (position * 0.5 + 0.5) * scale;
+  gl_Position = vec4(position, 0.0, 1.0);
+}`;
+const BABYLON_POSTPROCESS_FRAGMENT = `precision highp float;
+varying vec2 vUV;
+uniform sampler2D textureSampler;
+void main(void) {
+  gl_FragColor = texture2D(textureSampler, vUV);
+}`;
+
 type LogSource = "browserConsole" | "networkRequests" | "sessionReplay";
 
 function ensureLogDir() {
@@ -150,6 +167,30 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
+function vitePluginBabylonShaderFallback(): Plugin {
+  return {
+    name: "stormfall-babylon-shader-fallback",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/Shaders", (req, res, next) => {
+        const shaderPath = (req.url ?? "").split("?")[0];
+        const source =
+          shaderPath === "/postprocess.vertex.fx"
+            ? BABYLON_POSTPROCESS_VERTEX
+            : shaderPath === "/imageProcessing.fragment.fx"
+              ? BABYLON_POSTPROCESS_FRAGMENT
+              : null;
+
+        if (!source) return next();
+        res.writeHead(200, {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store, max-age=0",
+        });
+        res.end(source);
+      });
+    },
+  };
+}
+
 function vitePluginStorageProxy(): Plugin {
   return {
     name: "manus-storage-proxy",
@@ -203,7 +244,7 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginBabylonShaderFallback(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
 
 export default defineConfig({
   plugins,
