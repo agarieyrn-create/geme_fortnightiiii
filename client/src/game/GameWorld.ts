@@ -1370,7 +1370,7 @@ export class GameWorld {
 
     const boulderPositions = [
       [-12, 20, 4.2], [15, 6, 5.1], [-25, -14, 5.4], [31, -29, 4.6], [4, -39, 3.5],
-      [48, 16, 4.7], [-49, 42, 4], [39, 47, 4.4], [-6, -5, 3.3], [11, 43, 3.8],
+      [48, 16, 4.7], [-49, 42, 4], [39, 47, 4.4], [-18, -5, 3.3], [11, 43, 3.8],
     ] as const;
     boulderPositions.forEach(([x, z, size], index) => this.createBoulder(index, x, z, size));
     [[-70, 70, 16, 11], [72, 65, 18, 13], [-79, -57, 20, 12], [78, -68, 15, 10], [-7, -88, 18, 12], [96, 5, 22, 14]].forEach(([x, z, height, radius], index) => this.createMesa(index, x, z, height, radius));
@@ -2046,9 +2046,6 @@ export class GameWorld {
       new Vector3(6, 0, 18),
       new Vector3(0, 0, 10),
     ], "area1");
-    this.createExplorationWall("ruins-a", new Vector3(-6.5, 0, -1), 5.8, 1.1, new Color3(0.23, 0.25, 0.22));
-    this.createExplorationWall("ruins-b", new Vector3(6.5, 0, -7), 5.8, 1.1, new Color3(0.23, 0.25, 0.22));
-    this.createExplorationWall("ruins-c", new Vector3(0, 0, -17), 8.5, 1.1, new Color3(0.23, 0.25, 0.22));
     this.dungeonObjective = "敵を3体たおそう！";
   }
 
@@ -2162,11 +2159,11 @@ export class GameWorld {
       this.beginExploration(3, "古代のしるし");
       this.announcement = "クリア！ 次の部屋へ進もう！";
       this.openDungeonDoor(6);
-      this.createDungeonPickup(new Vector3(-8.8, 0.75, -4), "rune", "古代のしるし 1");
-      this.createDungeonPickup(new Vector3(8.8, 0.75, -10), "rune", "古代のしるし 2");
-      this.createDungeonPickup(new Vector3(0, 0.75, -20), "rune", "古代のしるし 3");
-      this.createDungeonPickup(new Vector3(-11.5, 0.75, -15), "med", "迷路の回復キット", 1);
-      this.createDungeonPickup(new Vector3(11.5, 0.75, -17), "secret", "古代の小さな宝箱", 25);
+      this.createDungeonPickup(new Vector3(-5.2, 0.75, -4), "rune", "古代のしるし 1");
+      this.createDungeonPickup(new Vector3(5.2, 0.75, -7.6), "rune", "古代のしるし 2");
+      this.createDungeonPickup(new Vector3(0, 0.75, -9.4), "rune", "古代のしるし 3");
+      this.createDungeonPickup(new Vector3(-5.8, 0.75, -8.6), "med", "迷路の回復キット", 1);
+      this.createDungeonPickup(new Vector3(5.8, 0.75, -9.2), "secret", "古代の小さな宝箱", 25);
       this.createDungeonPickup(new Vector3(-4.2, 0.75, -3.8), "weapon", "サブマシンガン", undefined, undefined, "smg");
       this.dungeonTransition = 1.2;
       this.pushEvent("次の部屋へ進もう！");
@@ -2190,10 +2187,10 @@ export class GameWorld {
       this.createDungeonPickup(new Vector3(-4, 0.75, -50), "ammo", "弾薬", 60, "medium");
       this.createDungeonPickup(new Vector3(4, 0.75, -50), "med", "回復キット", 1);
       this.createDungeonPickup(new Vector3(7.2, 0.75, -50), "weapon", "ショットガン", undefined, undefined, "shotgun");
-      this.createDungeonPickup(new Vector3(-11.5, 0.75, -48), "rune", "最深部の石版 1");
-      this.createDungeonPickup(new Vector3(11.5, 0.75, -57), "rune", "最深部の石版 2");
+      this.createDungeonPickup(new Vector3(-5.5, 0.75, -48), "rune", "最深部の石版 1");
+      this.createDungeonPickup(new Vector3(5.5, 0.75, -57), "rune", "最深部の石版 2");
       this.createDungeonPickup(new Vector3(0, 0.75, -65), "rune", "最深部の石版 3");
-      this.createDungeonPickup(new Vector3(-12, 0.75, -61), "secret", "崩れた宝物庫", 25);
+      this.createDungeonPickup(new Vector3(-5.8, 0.75, -61), "secret", "崩れた宝物庫", 25);
       this.dungeonTransition = 1.2;
       this.pushEvent("ボスへの道がひらいた！");
       this.playDungeonCue("clear");
