@@ -694,6 +694,7 @@ export class GameWorld {
   private dungeonTransition = 0;
   private dungeonKey = false;
   private ruinsRescueTimer = 0;
+  private readonly ruinsExplorationSites = new Set<string>();
   private explorationTokens = 0;
   private explorationGoal = 0;
   private explorationLabel = "";
@@ -1293,7 +1294,14 @@ export class GameWorld {
   }
 
   resolveObstacles(position: Vector3, clearance: number) {
-    if (this.options.step === "step5") position.x = Math.max(-7.4, Math.min(7.4, position.x));
+    if (this.options.step === "step5") {
+      const ruinsWideExploration = !this.isForestDungeon && !this.isCaveDungeon && this.dungeonArea === 2;
+      const maxX = ruinsWideExploration ? 40 : 7.4;
+      position.x = Math.max(-maxX, Math.min(maxX, position.x));
+      // The broad ruins may be explored from either side, but the boss route is
+      // held at the final gate until the player has discovered enough landmarks.
+      if (ruinsWideExploration && !this.dungeonKey && position.z < -10.85) position.z = -10.85;
+    }
     this.obstacles.forEach((obstacle) => {
       const delta = position.subtract(obstacle.position);
       delta.y = 0;
@@ -1431,6 +1439,47 @@ export class GameWorld {
       step.material = stoneMat;
     });
     this.createWorldSignal("ruins-forward-signal", new Vector3(-4.7, 0, 21), stoneMat, new Color3(0.075, 0.85, 0.77));
+    this.createWideRuinsExplorationCampus(stoneMat, mossMat, flameMat);
+  }
+
+  private createWideRuinsExplorationCampus(stoneMat: StandardMaterial, mossMat: StandardMaterial, flameMat: StandardMaterial) {
+    // A broad, readable expedition zone: a central ruined causeway and three
+    // distinct landmark rooms. Floors are intentionally non-blocking so mobile
+    // players always retain an escape route around the scenery.
+    const pads = [
+      { id: "causeway", x: 0, z: -2, width: 18, depth: 22 },
+      { id: "left-branch", x: -16, z: -1, width: 18, depth: 9 },
+      { id: "left-vault", x: -30, z: -6, width: 16, depth: 18 },
+      { id: "right-branch", x: 16, z: -4, width: 18, depth: 9 },
+      { id: "right-sanctum", x: 30, z: -8, width: 16, depth: 18 },
+      { id: "south-shortcut", x: -14, z: -13, width: 20, depth: 8 },
+      { id: "archive", x: 15, z: -15, width: 20, depth: 8 },
+    ];
+    pads.forEach((pad) => {
+      const floor = MeshBuilder.CreateBox(`ruins-wide-${pad.id}`, { width: pad.width, height: 0.13, depth: pad.depth }, this.scene);
+      floor.position.set(pad.x, 0.07, pad.z);
+      floor.material = stoneMat;
+      const border = MeshBuilder.CreateTorus(`ruins-wide-ring-${pad.id}`, { diameter: Math.min(pad.width, pad.depth) * 0.48, thickness: 0.055, tessellation: 20 }, this.scene);
+      border.position.set(pad.x, 0.15, pad.z);
+      border.rotation.x = Math.PI / 2;
+      border.scaling.x = pad.width / Math.min(pad.width, pad.depth);
+      border.scaling.y = pad.depth / Math.min(pad.width, pad.depth);
+      border.material = mossMat;
+    });
+    [
+      { id: "left-vault", position: new Vector3(-30, 0, -6), color: new Color3(0.18, 0.78, 0.38) },
+      { id: "right-sanctum", position: new Vector3(30, 0, -8), color: new Color3(0.96, 0.55, 0.14) },
+      { id: "archive", position: new Vector3(15, 0, -15), color: new Color3(0.13, 0.75, 0.86) },
+    ].forEach(({ id, position, color }) => this.createWorldSignal(`ruins-site-${id}`, position, stoneMat, color));
+    [-22, 22, -36, 36].forEach((x, index) => {
+      const pillar = MeshBuilder.CreateCylinder(`ruins-wide-pillar-${index}`, { height: 4.3, diameterTop: 0.44, diameterBottom: 0.68, tessellation: 7 }, this.scene);
+      pillar.position.set(x, 2.15, index % 2 === 0 ? -3 : -10);
+      pillar.rotation.z = index % 2 ? 0.1 : -0.08;
+      pillar.material = stoneMat;
+      const flame = MeshBuilder.CreateSphere(`ruins-wide-flame-${index}`, { diameter: 0.3, segments: 8 }, this.scene);
+      flame.position.set(x, 4.45, index % 2 === 0 ? -3 : -10);
+      flame.material = flameMat;
+    });
   }
 
   private createWorldSignal(id: string, position: Vector3, structureMaterial: StandardMaterial, signalColor: Color3) {
@@ -2141,6 +2190,24 @@ export class GameWorld {
     wall.isPickable = false;
   }
 
+  private updateWideRuinsExplorationSites() {
+    const sites = [
+      { id: "vault", position: new Vector3(-30, 0, -6), label: "左の宝物庫を見つけた！" },
+      { id: "sanctum", position: new Vector3(30, 0, -8), label: "右の回復の祠を見つけた！" },
+      { id: "archive", position: new Vector3(15, 0, -15), label: "古い記録庫を見つけた！" },
+    ];
+    sites.forEach((site) => {
+      if (this.ruinsExplorationSites.has(site.id)) return;
+      if (Vector3.DistanceSquared(this.player.root.position, site.position) > 6.2 * 6.2) return;
+      this.ruinsExplorationSites.add(site.id);
+      this.explorationTokens = this.ruinsExplorationSites.size;
+      this.dungeonObjective = `探索地点をあと ${Math.max(0, this.explorationGoal - this.explorationTokens)}か所見つけよう！`;
+      this.announcement = site.label;
+      this.pushEvent(site.label);
+      this.playExplorationHint("safe");
+    });
+  }
+
   private updateDungeonProgress(delta: number) {
     if (this.options.step !== "step5") return;
     if (this.isCaveDungeon) {
@@ -2157,19 +2224,19 @@ export class GameWorld {
     }
     if (this.dungeonArea === 1 && this.dungeonWave.length > 0 && this.dungeonWave.every((rival) => !rival.alive)) {
       this.dungeonArea = 2;
-      this.beginExploration(3, "古代のしるし");
-      this.announcement = "クリア！ 次の部屋へ進もう！";
+      this.ruinsExplorationSites.clear();
+      this.beginExploration(2, "探索地点");
+      this.dungeonObjective = "探索地点を2か所見つけよう！";
+      this.announcement = "クリア！ 左右の遺跡を探してみよう！";
       this.openDungeonDoor(6);
-      // Main route: simply advancing through the room finds one required marker
-      // at a time. Optional equipment and rewards sit on clear side detours.
-      this.createDungeonPickup(new Vector3(0, 0.75, -3.1), "rune", "古代のしるし 1");
-      this.createDungeonPickup(new Vector3(0.7, 0.75, -6.8), "rune", "古代のしるし 2");
-      this.createDungeonPickup(new Vector3(-0.5, 0.75, -10.2), "rune", "古代のしるし 3");
-      this.createDungeonPickup(new Vector3(-5.8, 0.75, -2.4), "weapon", "サブマシンガン", undefined, undefined, "smg");
-      this.createDungeonPickup(new Vector3(-5.8, 0.75, -7.8), "med", "迷路の回復キット", 1);
-      this.createDungeonPickup(new Vector3(5.8, 0.75, -8.6), "secret", "古代の小さな宝箱", 25);
+      // Optional discoveries. None are needed to open the next gate.
+      this.createDungeonPickup(new Vector3(-33, 0.75, -7), "weapon", "宝物庫のサブマシンガン", undefined, undefined, "smg");
+      this.createDungeonPickup(new Vector3(-28, 0.75, -10), "ammo", "宝物庫の弾薬", 80, "medium");
+      this.createDungeonPickup(new Vector3(32, 0.75, -9), "med", "祠の回復キット", 2);
+      this.createDungeonPickup(new Vector3(28, 0.75, -12), "secret", "祠の小さな宝箱", 35);
+      this.createDungeonPickup(new Vector3(15, 0.75, -18), "secret", "記録庫の古代コイン", 50);
       this.dungeonTransition = 1.2;
-      this.pushEvent("次の部屋へ進もう！");
+      this.pushEvent("道の先だけでなく、左右の遺跡も見てみよう！");
       this.playDungeonCue("clear");
       this.playExplorationHint("fork");
     } else if (this.dungeonArea === 2 && this.dungeonKey && this.explorationComplete()) {
@@ -2184,8 +2251,9 @@ export class GameWorld {
       this.pushEvent("エリア3へ進もう！");
       this.playDungeonCue("spawn");
     } else if (this.dungeonArea === 2) {
+      this.updateWideRuinsExplorationSites();
       this.ruinsRescueTimer += delta;
-      if (this.ruinsRescueTimer >= 6) {
+      if (this.ruinsRescueTimer >= 35) {
         this.dungeonKey = true;
         this.explorationTokens = this.explorationGoal;
         this.dungeonObjective = "道がひらいた！ エリア3へ進もう！";
