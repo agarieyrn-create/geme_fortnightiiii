@@ -657,6 +657,7 @@ export class GameWorld {
   private readonly playerController: PlayerController;
   private readonly hudController = new HudController();
   private audioContext?: AudioContext;
+  private ambientTimer = 1.4;
   private readonly stormRing?: Mesh;
   private readonly stormCore?: Mesh;
   private readonly terrainMaterial: StandardMaterial;
@@ -886,6 +887,7 @@ export class GameWorld {
     if (this.mode !== "briefing") return;
     this.mode = "playing";
     this.dungeonStartedAt = performance.now();
+    this.ambientTimer = 1.1;
     this.announcement = this.options.step === "step5" ? (this.isCaveDungeon ? "くらやみの洞窟　明かりをたよりに進もう！" : this.isForestDungeon ? "まよいの森　森のおくへ進もう！" : "はじまりの遺跡　敵をたおして、いちばん奥を目指そう！") : "裂け目への降下を確認";
     this.dungeonObjective = this.options.step === "step5" ? (this.isCaveDungeon ? "洞窟のおくへ進もう！" : this.isForestDungeon ? "森のおくへ進もう！" : "敵を3体たおそう！") : this.dungeonObjective;
     this.pushEvent(this.options.step === "step5" ? (this.isCaveDungeon ? "洞窟外縁信号を確認。明かりを追え。" : this.isForestDungeon ? "森林信号を確認。分岐を見失うな。" : "遺跡信号を確認。最深部へ進め。") : "エリア RIFT-07 に着地");
@@ -900,6 +902,7 @@ export class GameWorld {
     this.currentAiming = false;
     this.currentCrouching = false;
     this.player.setAiming(false);
+    this.ambientTimer = 1.4;
     this.announcement = "降下準備画面へもどったよ";
   }
 
@@ -935,6 +938,7 @@ export class GameWorld {
     }
     if (this.mode === "playing") {
       this.elapsed += delta;
+      this.updateAmbientSound(delta);
       if (this.options.step === "full") this.updateStorm(delta);
       this.updatePlayer(delta);
       if (this.options.step === "full" || this.options.step === "step3" || this.options.step === "step4" || this.options.step === "step5") {
@@ -1044,6 +1048,59 @@ export class GameWorld {
       oscillator.connect(gain).connect(this.audioContext!.destination);
       oscillator.start(noteStart);
       oscillator.stop(noteStart + pattern.noteLength);
+    });
+  }
+
+  private playExplorationHint(kind: "fork" | "safe" | "treasure" | "deep") {
+    if (typeof window === "undefined" || this.progression.sfxVolume <= 0.01) return;
+    this.audioContext ??= new AudioContext();
+    if (this.audioContext.state === "suspended") void this.audioContext.resume();
+    const patterns: Record<typeof kind, { notes: number[]; type: OscillatorType; volume: number }> = {
+      fork: { notes: [330, 440], type: "sine", volume: 0.022 },
+      safe: { notes: [392, 523], type: "triangle", volume: 0.024 },
+      treasure: { notes: [659, 784, 1047], type: "sine", volume: 0.02 },
+      deep: { notes: [147, 110], type: "triangle", volume: 0.022 },
+    };
+    const pattern = patterns[kind];
+    const start = this.audioContext.currentTime;
+    pattern.notes.forEach((frequency, index) => {
+      const oscillator = this.audioContext!.createOscillator();
+      const gain = this.audioContext!.createGain();
+      const noteStart = start + index * 0.12;
+      oscillator.type = pattern.type;
+      oscillator.frequency.setValueAtTime(frequency, noteStart);
+      gain.gain.setValueAtTime(pattern.volume * this.progression.sfxVolume, noteStart);
+      gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.16);
+      oscillator.connect(gain).connect(this.audioContext!.destination);
+      oscillator.start(noteStart);
+      oscillator.stop(noteStart + 0.18);
+    });
+  }
+
+  private updateAmbientSound(delta: number) {
+    if (this.options.step !== "step5" || this.progression.sfxVolume <= 0.01) return;
+    this.ambientTimer -= delta;
+    if (this.ambientTimer > 0 || typeof window === "undefined") return;
+    this.ambientTimer = this.isCaveDungeon ? 7.5 : this.isForestDungeon ? 10.5 : 9;
+    this.audioContext ??= new AudioContext();
+    if (this.audioContext.state === "suspended") void this.audioContext.resume();
+    const sound = this.isCaveDungeon
+      ? { notes: [64, 96], type: "sine" as OscillatorType, volume: 0.009 }
+      : this.isForestDungeon
+        ? { notes: [523, 659], type: "sine" as OscillatorType, volume: 0.008 }
+        : { notes: [98, 147], type: "triangle" as OscillatorType, volume: 0.009 };
+    const start = this.audioContext.currentTime;
+    sound.notes.forEach((frequency, index) => {
+      const oscillator = this.audioContext!.createOscillator();
+      const gain = this.audioContext!.createGain();
+      const noteStart = start + index * 0.42;
+      oscillator.type = sound.type;
+      oscillator.frequency.setValueAtTime(frequency, noteStart);
+      gain.gain.setValueAtTime(sound.volume * this.progression.sfxVolume, noteStart);
+      gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.7);
+      oscillator.connect(gain).connect(this.audioContext!.destination);
+      oscillator.start(noteStart);
+      oscillator.stop(noteStart + 0.74);
     });
   }
 
@@ -2111,6 +2168,7 @@ export class GameWorld {
       this.dungeonTransition = 1.2;
       this.pushEvent("次の部屋へ進もう！");
       this.playDungeonCue("clear");
+      this.playExplorationHint("fork");
     } else if (this.dungeonArea === 2 && this.dungeonKey && this.explorationComplete()) {
       this.dungeonArea = 3;
       this.dungeonObjective = "敵をぜんぶたおそう！";
@@ -2136,6 +2194,7 @@ export class GameWorld {
       this.dungeonTransition = 1.2;
       this.pushEvent("ボスへの道がひらいた！");
       this.playDungeonCue("clear");
+      this.playExplorationHint("deep");
     } else if (this.dungeonArea === 4 && this.explorationComplete() && this.player.root.position.z < -62) {
       this.openDungeonDoor(-72);
       if (this.player.root.position.z >= -70) return;
@@ -2197,6 +2256,7 @@ export class GameWorld {
       this.createDungeonPickup(new Vector3(11.5, 0.75, -15), "secret", "鉱石の小さな報酬", 25);
       this.pushEvent("近づいたら、おしてみよう！");
       this.playDungeonCue("key");
+      this.playExplorationHint("fork");
     } else if (this.dungeonArea === 3 && this.caveSwitchesOn >= 2 && this.explorationComplete()) {
       this.dungeonArea = 4;
       this.dungeonWaveActive = false;
@@ -2220,6 +2280,7 @@ export class GameWorld {
       this.createDungeonPickup(new Vector3(0, 0.75, -67), "rune", "深層の鉱石 3");
       this.createDungeonPickup(new Vector3(11, 0.75, -62), "secret", "深層の小さな報酬", 25);
       this.playDungeonCue("clear");
+      this.playExplorationHint("deep");
     } else if (this.dungeonArea === 5 && this.explorationComplete() && z < -66) {
       this.openDungeonDoor(-74);
       if (z >= -74) return;
@@ -2271,6 +2332,7 @@ export class GameWorld {
       this.createDungeonPickup(new Vector3(3.6, 0.75, 2.4), "weapon", "ショットガン", undefined, undefined, "shotgun");
       this.pushEvent("左は回復、右は宝箱の道だよ");
       this.playDungeonCue("clear");
+      this.playExplorationHint("fork");
     } else if (this.dungeonArea === 2 && !this.forestRoute && z < 1) {
       this.forestRoute = this.player.root.position.x < 0 ? "left" : "right";
       this.dungeonWaveActive = true;
@@ -2283,6 +2345,7 @@ export class GameWorld {
         this.createDungeonPickup(new Vector3(-12, 0.75, -24), "secret", "木のうろの報酬", 25);
         this.spawnDungeonWave([new Vector3(-5, 0, -10), new Vector3(-4, 0, -20)], "forest-left", ["melee", "ranged"]);
         this.announcement = "左の道　回復を見つけよう！";
+        this.playExplorationHint("safe");
       } else {
         this.createDungeonPickup(new Vector3(6, 0.75, -20), "secret", "隠し宝箱", 50);
         this.createDungeonPickup(new Vector3(10.5, 0.75, -8), "rune", "森のひかり 1");
@@ -2291,6 +2354,7 @@ export class GameWorld {
         this.createDungeonPickup(new Vector3(12, 0.75, -24), "med", "木かげの回復", 1);
         this.spawnDungeonWave([new Vector3(5, 0, -9), new Vector3(6, 0, -16), new Vector3(4, 0, -24)], "forest-right", ["ranged", "melee", "ranged"]);
         this.announcement = "右の道　宝箱を探そう！";
+        this.playExplorationHint("treasure");
       }
       this.pushEvent(this.announcement);
       this.playDungeonCue("spawn");
