@@ -11,17 +11,6 @@ import "@babylonjs/core/Shaders/default.vertex";
 import "@babylonjs/core/Shaders/default.fragment";
 import "@babylonjs/core/Shaders/layer.vertex";
 import "@babylonjs/core/Shaders/layer.fragment";
-import "@babylonjs/core/Shaders/postprocess.vertex";
-import "@babylonjs/core/Shaders/imageProcessing.fragment";
-import "@babylonjs/core/Shaders/fxaa.vertex";
-import "@babylonjs/core/Shaders/fxaa.fragment";
-import "@babylonjs/core/Shaders/extractHighlights.fragment";
-import "@babylonjs/core/Shaders/kernelBlur.vertex";
-import "@babylonjs/core/Shaders/kernelBlur.fragment";
-import "@babylonjs/core/Shaders/bloomMerge.fragment";
-import "@babylonjs/core/Shaders/chromaticAberration.fragment";
-import "@babylonjs/core/Shaders/grain.fragment";
-import "@babylonjs/core/Shaders/sharpen.fragment";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Scene } from "@babylonjs/core/scene";
@@ -30,8 +19,6 @@ import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
-import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
-import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
 import { Layer } from "@babylonjs/core/Layers/layer";
 import { InputManager, type InputSnapshot } from "./InputManager";
 import { TouchInputManager } from "./TouchInputManager";
@@ -686,7 +673,6 @@ export class GameWorld {
   private readonly terrainMaterial: StandardMaterial;
   private readonly signalMaterials = new Map<StormfallSignal, StandardMaterial>();
   private shadowGenerator?: ShadowGenerator;
-  private renderingPipeline?: DefaultRenderingPipeline;
   private shadowRefreshTimer = 0;
   private readonly shadowCasters = new Set<Mesh>();
   private mode: "briefing" | "playing" | "paused" | MatchOutcome = "briefing";
@@ -819,21 +805,13 @@ export class GameWorld {
 
   private configureRenderingPipeline() {
     const quality = this.options.graphicsQuality;
-    if (quality === "light") return;
+    // Keep colour treatment inside the scene/material path. Avoid creating post-process
+    // effects because the Vite fallback can serve HTML for lazy .fx shader requests.
     const imageProcessing = this.scene.imageProcessingConfiguration;
-    imageProcessing.toneMappingEnabled = true;
-    imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    imageProcessing.exposure = this.isCaveDungeon ? 1.06 : 1.12;
-    imageProcessing.contrast = this.isCaveDungeon ? 1.12 : 1.08;
-    const pipeline = new DefaultRenderingPipeline("stormfall-visual-pipeline", true, this.scene, [this.camera]);
-    pipeline.fxaaEnabled = true;
-    pipeline.imageProcessingEnabled = true;
-    pipeline.samples = quality === "pretty" ? 2 : 1;
-    pipeline.bloomEnabled = true;
-    pipeline.bloomThreshold = quality === "pretty" ? 0.8 : 1.05;
-    pipeline.bloomWeight = quality === "pretty" ? 0.14 : 0.055;
-    pipeline.bloomKernel = quality === "pretty" ? 56 : 40;
-    this.renderingPipeline = pipeline;
+    imageProcessing.toneMappingEnabled = false;
+    imageProcessing.vignetteEnabled = false;
+    imageProcessing.exposure = quality === "light" ? 1 : this.isCaveDungeon ? 1.06 : 1.1;
+    imageProcessing.contrast = quality === "pretty" ? (this.isCaveDungeon ? 1.1 : 1.07) : 1.02;
   }
 
   private refreshShadowCasters() {
@@ -1364,7 +1342,6 @@ export class GameWorld {
   }
 
   dispose() {
-    this.renderingPipeline?.dispose();
     this.shadowGenerator?.dispose();
     this.input.dispose();
     this.touchInput.dispose();

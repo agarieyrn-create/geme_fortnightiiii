@@ -465,4 +465,11 @@
 - [x] 添付ログの後処理エフェクトと、`from_webdev`でのみ再発する未登録シェーダーを特定する
 - [x] post-process系を含む必要シェーダーを明示登録するか、安全な描画構成へ置換する
 - [x] `?from_webdev=1` と遺跡・森・洞窟でブラウザコンソールが無エラーであることを確認する
-- [ ] 根本修正版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
+- [x] 根本修正版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
+
+## postprocess フラグメント再発修正
+
+- [x] 添付ログの`postprocess`頂点と未登録フラグメントを照合し、DefaultRenderingPipeline依存箇所を特定する
+- [x] DefaultRenderingPipelineを廃止し、シーン内の安全な色調・露出・コントラスト設定へ置換する
+- [x] `?from_webdev=1`のホームと遺跡・森・洞窟でコンソール無エラーを確認する
+- [ ] 安全な描画構成をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
