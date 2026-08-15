@@ -170,13 +170,16 @@ function vitePluginManusDebugCollector(): Plugin {
 function vitePluginBabylonShaderFallback(): Plugin {
   return {
     name: "stormfall-babylon-shader-fallback",
+    enforce: "pre",
     configureServer(server: ViteDevServer) {
-      server.middlewares.use("/Shaders", (req, res, next) => {
-        const shaderPath = (req.url ?? "").split("?")[0];
+      server.middlewares.use((req, res, next) => {
+        const shaderPath = new URL(req.url ?? "/", "http://stormfall.local").pathname;
+        const isBabylonShaderRequest = /(?:^|\/)(?:Shaders|ShadersInclude|Effects)\/.*\.(?:fx|glsl)$/i.test(shaderPath);
+        if (!isBabylonShaderRequest) return next();
         const source =
-          shaderPath.endsWith(".vertex.fx")
+          /\.vertex\.(?:fx|glsl)$/i.test(shaderPath)
             ? BABYLON_POSTPROCESS_VERTEX
-            : shaderPath.endsWith(".fragment.fx")
+            : /\.(?:fragment\.)?(?:fx|glsl)$/i.test(shaderPath)
               ? BABYLON_POSTPROCESS_FRAGMENT
               : null;
 

@@ -493,4 +493,11 @@
 - [x] 最新ログの未特定postprocess要求と、既存の限定フォールバック範囲を照合する
 - [x] `/Shaders/`配下の任意の`.vertex.fx`・`.fragment.fx`へ有効な汎用GLSLを返すよう拡張する
 - [x] 複数の旧FX URLと`?from_webdev=1`でHTML誤読が発生しないことを確認する
-- [ ] 完全フォールバック版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
+- [x] 完全フォールバック版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する
+
+## BabylonシェーダーURL正規化
+
+- [x] ログとBabylonの要求形式を照合し、`/Shaders`以外のパス・拡張子・URL正規化の漏れを確定する
+- [x] Engineのシェーダーリポジトリを固定し、Viteで任意URL上のFX・GLSL要求を捕捉する
+- [x] `from_webdev`と異なるパス・クエリ形式のシェーダー要求がHTMLでなくGLSLへ解決されることを確認する
+- [ ] 完全修正版をチェックポイント保存し、GitHub mainへ反映してSHAを照合する

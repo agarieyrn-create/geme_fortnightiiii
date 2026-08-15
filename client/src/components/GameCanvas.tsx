@@ -102,6 +102,9 @@ export default function GameCanvas() {
     startedRef.current = true;
 
     const compactRenderer = window.matchMedia("(max-width: 767px), (pointer: coarse)").matches;
+    // Keep every newly created Babylon scene on the same Vite-served shader root.
+    // The dev middleware also catches legacy /src/Shaders requests from an old scene.
+    Engine.ShadersRepository = "/Shaders/";
     const engine = new Engine(canvas, true, {
       preserveDrawingBuffer: false,
       stencil: true,
