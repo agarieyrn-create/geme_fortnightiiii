@@ -870,6 +870,17 @@ export class GameWorld {
     if (this.options.step === "step5") this.playDungeonCue("spawn");
   }
 
+  returnToBriefing() {
+    if (this.mode !== "playing") return;
+    this.mode = "briefing";
+    this.input.reset();
+    this.touchInput.reset();
+    this.currentAiming = false;
+    this.currentCrouching = false;
+    this.player.setAiming(false);
+    this.announcement = "降下準備画面へもどったよ";
+  }
+
   setPlayerAvatar(avatarId: string) {
     // Selection is allowed only in the briefing. Once play starts, the same
     // CharacterVisual and its animations remain active until the world ends.

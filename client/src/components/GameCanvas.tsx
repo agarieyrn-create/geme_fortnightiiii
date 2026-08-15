@@ -61,6 +61,15 @@ export default function GameCanvas() {
   const selectedAvatarRef = useRef<AvatarId>(avatar);
   const gameState = outcome ? "gameover" : started ? "playing" : "menu";
 
+  const returnToHub = () => {
+    handleRef.current?.returnToBriefing();
+    if (document.pointerLockElement) document.exitPointerLock();
+    setOutcome(null);
+    setTutorial(null);
+    setStarted(false);
+    setHubView("home");
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || startedRef.current) return;
@@ -127,6 +136,18 @@ export default function GameCanvas() {
     };
   }, [isDemo, quickStart, selectedDungeon, progression, debugMode]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!started || event.repeat) return;
+      if (event.key === "Escape" || event.key.toLowerCase() === "h") {
+        event.preventDefault();
+        returnToHub();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [started]);
+
   const changeUpgrade = (key: "hpLevel" | "attackLevel" | "reloadLevel") => {
     const result = applyUpgrade(progression, key);
     progressionRef.current = result.data;
@@ -183,6 +204,7 @@ export default function GameCanvas() {
         aria-label="Stormfall: Last Horizon の3Dゲーム画面"
         ref={canvasRef}
         className="stormfall-canvas"
+        tabIndex={0}
         style={{ touchAction: "none" }}
       />
       <div className={`touch-controls ${gameState === "playing" ? "is-playing" : "is-hidden"}`} aria-label="モバイル操作" aria-hidden={gameState !== "playing"}>
@@ -218,6 +240,7 @@ export default function GameCanvas() {
             <span className="eyebrow">ダンジョン</span>
             <strong>{dungeonName}</strong>
           </div>
+          <button className="home-return-button" type="button" onClick={returnToHub}>ホーム <kbd>Esc</kbd></button>
         </header>
 
         <aside className="tactical-stack" aria-label="戦術情報">
@@ -260,7 +283,7 @@ export default function GameCanvas() {
         <div className="state-chip"><span>うごき</span><strong id="motion-state">待機</strong><i id="crouch-state">立つ</i></div>
         <div id="hit-marker" className="hit-marker" aria-hidden="true">×</div>
         <ol id="event-feed" className="event-feed" aria-label="戦闘ログ" />
-        <p className="control-strip">WASD 移動 <b>·</b> マウス ねらう／うつ <b>·</b> R リロード <b>·</b> SPACE ジャンプ <b>·</b> C しゃがむ</p>
+        <p className="control-strip">WASD 移動 <b>·</b> マウス ねらう／うつ <b>·</b> R リロード <b>·</b> SPACE ジャンプ <b>·</b> C しゃがむ <b>·</b> Esc／H ホーム</p>
       </div>
 
       {!started && (

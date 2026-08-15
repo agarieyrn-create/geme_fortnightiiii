@@ -1,4 +1,4 @@
-// Stormfall: Last Horizon — TPS input layer. Pointer-lock mouse look, keyboard movement, aim, crouch, reload, and a gamepad-ready snapshot shape.
+// Stormfall PC Input Layer — pointer lock owns mouse aim, horizontal look is intentionally inverted, and all gameplay input resets on focus loss.
 export type InputSnapshot = {
   forward: number;
   right: number;
@@ -42,6 +42,7 @@ export class InputManager {
     this.listen(window, "keyup", (event: Event) => this.keys.delete((event as KeyboardEvent).key.toLowerCase()));
     this.listen(canvas, "mousedown", (event: Event) => {
       const mouse = event as MouseEvent;
+      canvas.focus({ preventScroll: true });
       this.requestPointerLock();
       if (mouse.button === 0) this.firing = true;
       if (mouse.button === 2) this.aiming = true;
@@ -57,14 +58,27 @@ export class InputManager {
     this.listen(window, "mousemove", (event: Event) => {
       const pointer = event as MouseEvent;
       if (document.pointerLockElement === this.canvas) {
-        this.lookX += pointer.movementX;
+        // PC horizontal view is intentionally inverted at the input source.
+        // Movement and screen-centre raycasts remain in their original directions.
+        this.lookX -= pointer.movementX;
         this.lookY += pointer.movementY;
+      }
+    });
+    this.listen(document, "pointerlockchange", () => {
+      this.lookX = 0;
+      this.lookY = 0;
+      if (document.pointerLockElement !== this.canvas) {
+        this.firing = false;
+        this.aiming = false;
       }
     });
   }
 
   requestPointerLock() {
-    if (document.pointerLockElement !== this.canvas) void this.canvas.requestPointerLock?.();
+    if (document.pointerLockElement !== this.canvas) {
+      this.canvas.focus({ preventScroll: true });
+      void this.canvas.requestPointerLock?.();
+    }
   }
 
   snapshot(): InputSnapshot {
