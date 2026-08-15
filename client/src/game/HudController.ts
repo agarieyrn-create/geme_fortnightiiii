@@ -16,11 +16,11 @@ export class HudController {
     setText("ammo-value", snapshot.ammo.toString());
     setText("reserve-value", snapshot.reserve.toString());
     setText("weapon-name", snapshot.weaponName ?? "武器なし");
-    const weaponShortNames: Record<string, string> = { assault: "AR", smg: "SMG", shotgun: "SG" };
+    const weaponShortNames: Record<string, string> = { assault: "1 ライフル", smg: "2 速射", shotgun: "3 散弾" };
     const weaponFullNames: Record<string, string> = { assault: "アサルトライフル", smg: "サブマシンガン", shotgun: "ショットガン" };
     snapshot.slots?.forEach((slot, index) => {
       const element = document.getElementById(`slot-${index + 1}`);
-      if (element) element.textContent = slot ? weaponShortNames[slot] ?? slot : "なし";
+      if (element) element.textContent = slot ? weaponShortNames[slot] ?? slot : `${index + 1} —`;
       element?.classList.toggle("selected", slot !== null && weaponFullNames[slot] === snapshot.weaponName);
     });
     const medkits = snapshot.medkits ?? 0;

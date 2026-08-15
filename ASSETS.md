@@ -27,12 +27,16 @@
 | stormfall-ruins-ground-texture | 角の取れた砂岩の敷石、控えめな苔と小石を持つ遺跡用の手描き風反復地表 | 1:1、遺跡の床・道 | `/manus-storage/stormfall-ruins-ground-texture_441a71b0.png` |
 | stormfall-forest-ground-texture | 草、落ち葉、根、土を組み合わせた森の小道用の手描き風反復地表 | 1:1、森の地面・分岐路 | `/manus-storage/stormfall-forest-ground-texture_6eb34a85.png` |
 | stormfall-cave-ground-texture | 玄武岩、微かなティール鉱脈、琥珀色の粉塵を持つ洞窟用の手描き風反復地表 | 1:1、洞窟の床・岩場 | `/manus-storage/stormfall-cave-ground-texture_32b8bd63.png` |
+| stormfall-horizon-atlas | 浮遊する砂岩と玄武岩、ティールの嵐弧、航法パイロン、琥珀補給灯を含む実プレイ用の地平線 | 21:9、遺跡・森の遠景レイヤー | `/manus-storage/stormfall-horizon-atlas_93cd3ab9.png` |
 
 ## Props
 
 | Name | Description | Size | Image |
 |---|---|---|---|
 | stormfall-supply-beacon | 琥珀の信号灯とティール色ホログラムを持つ補給カプセルの視覚参照 | 高さ 1.6m、幅 1.2m | `/manus-storage/stormfall-supply-beacon-fixed_fefc7346.png` |
+| stormfall-supply-sigil | 琥珀セルとティール診断線を持つ補給信号プレート | 1:1、弾薬・回復・宝箱・武器補給の表示面 | `/manus-storage/stormfall-supply-sigil_1010f049.png` |
+| stormfall-navigation-sigil | ティールの裂け目信号と地平線計器を持つ航法プレート | 1:1、航法パイロン・探索地点の表示面 | `/manus-storage/stormfall-navigation-sigil_f9c51b6a.png` |
+| stormfall-danger-sigil | 朱赤の裂け目亀裂と封じ込めリングを持つ危険信号プレート | 1:1、床トラップ・危険区域の表示面 | `/manus-storage/stormfall-danger-sigil_43a130d4.png` |
 
 ## Character Renders
 

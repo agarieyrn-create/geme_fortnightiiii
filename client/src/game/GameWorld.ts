@@ -18,6 +18,7 @@ import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
+import { Layer } from "@babylonjs/core/Layers/layer";
 import { InputManager, type InputSnapshot } from "./InputManager";
 import { TouchInputManager } from "./TouchInputManager";
 import { CameraController } from "./CameraController";
@@ -36,6 +37,11 @@ const AMBER = new Color3(1, 0.54, 0.15);
 const SAND = new Color3(0.31, 0.12, 0.035);
 const BASALT = new Color3(0.12, 0.055, 0.023);
 const RUST = new Color3(0.77, 0.16, 0.1);
+const HORIZON_ATLAS_URL = "/manus-storage/stormfall-horizon-atlas_93cd3ab9.png";
+const SUPPLY_SIGIL_URL = "/manus-storage/stormfall-supply-sigil_1010f049.png";
+const NAVIGATION_SIGIL_URL = "/manus-storage/stormfall-navigation-sigil_f9c51b6a.png";
+const DANGER_SIGIL_URL = "/manus-storage/stormfall-danger-sigil_43a130d4.png";
+type StormfallSignal = "supply" | "navigation" | "danger";
 
 const PLAYER_MAX_HP = 300;
 const ENEMY_MAX_HP = 100;
@@ -236,6 +242,9 @@ class Combatant {
     this.hpLabel.position.y = 3.05;
     this.hpLabel.billboardMode = Mesh.BILLBOARDMODE_ALL;
     this.hpLabel.isPickable = false;
+    // Ordinary enemies communicate danger through their red armour and ground halo.
+    // Boss health is intentionally shown in the dedicated top HUD instead of as noisy in-world text.
+    this.hpLabel.isVisible = false;
     this.hpLabel.material = this.hpLabelMaterial;
     this.updateEnemyHpLabel();
   }
@@ -661,6 +670,7 @@ export class GameWorld {
   private readonly stormRing?: Mesh;
   private readonly stormCore?: Mesh;
   private readonly terrainMaterial: StandardMaterial;
+  private readonly signalMaterials = new Map<StormfallSignal, StandardMaterial>();
   private shadowGenerator?: ShadowGenerator;
   private renderingPipeline?: DefaultRenderingPipeline;
   private shadowRefreshTimer = 0;
@@ -770,20 +780,20 @@ export class GameWorld {
       this.scene.fogColor = new Color3(0.14, 0.28, 0.18);
       this.scene.fogDensity = (isMobile ? 0.0045 : 0.008) * fogMultiplier;
     } else if (this.isCaveDungeon) {
-      this.scene.clearColor = new Color4(0.035, 0.03, 0.075, 1);
-      this.scene.ambientColor = new Color3(0.18, 0.16, 0.29);
-      this.scene.fogColor = new Color3(0.075, 0.06, 0.15);
-      this.scene.fogDensity = (isMobile ? 0.0042 : 0.0075) * fogMultiplier;
+      this.scene.clearColor = new Color4(0.055, 0.045, 0.12, 1);
+      this.scene.ambientColor = new Color3(0.32, 0.25, 0.47);
+      this.scene.fogColor = new Color3(0.11, 0.085, 0.2);
+      this.scene.fogDensity = (isMobile ? 0.0034 : 0.0058) * fogMultiplier;
     }
 
     const sky = new HemisphericLight("stormfall-sky-fill", new Vector3(0.18, 1, 0.08), this.scene);
     sky.groundColor = this.isCaveDungeon ? new Color3(0.08, 0.035, 0.13) : this.isForestDungeon ? new Color3(0.075, 0.12, 0.055) : new Color3(0.16, 0.075, 0.035);
-    sky.intensity = this.isCaveDungeon ? 0.72 : this.isForestDungeon ? 0.94 : 1.02;
+    sky.intensity = this.isCaveDungeon ? 0.96 : this.isForestDungeon ? 0.94 : 1.02;
     if (quality === "light") return;
 
     const sun = new DirectionalLight("stormfall-key-light", new Vector3(-0.36, -0.72, 0.38), this.scene);
     sun.position = new Vector3(42, 72, -35);
-    sun.intensity = this.isCaveDungeon ? 0.48 : this.isForestDungeon ? 0.96 : 1.16;
+    sun.intensity = this.isCaveDungeon ? 0.76 : this.isForestDungeon ? 0.96 : 1.16;
     if (quality === "pretty") {
       const shadowGenerator = new ShadowGenerator(isMobile ? 1024 : 1536, sun);
       shadowGenerator.useBlurExponentialShadowMap = true;
@@ -827,10 +837,10 @@ export class GameWorld {
     this.configureVisualLighting();
 
     this.terrainMaterial = new StandardMaterial("sandstone-terrain", scene);
-    this.terrainMaterial.diffuseColor = this.isCaveDungeon ? new Color3(0.13, 0.095, 0.19) : this.isForestDungeon ? new Color3(0.09, 0.26, 0.13) : SAND;
+    this.terrainMaterial.diffuseColor = this.isCaveDungeon ? new Color3(0.42, 0.31, 0.58) : this.isForestDungeon ? new Color3(0.09, 0.26, 0.13) : SAND;
     this.terrainMaterial.specularColor = new Color3(0.04, 0.035, 0.025);
     this.terrainMaterial.diffuseTexture = this.createTerrainTexture();
-    this.terrainMaterial.emissiveColor = this.isCaveDungeon ? new Color3(0.018, 0.008, 0.052) : this.isForestDungeon ? new Color3(0.005, 0.024, 0.01) : new Color3(0.006, 0.001, 0);
+    this.terrainMaterial.emissiveColor = this.isCaveDungeon ? new Color3(0.2, 0.13, 0.42) : this.isForestDungeon ? new Color3(0.022, 0.082, 0.03) : new Color3(0.006, 0.001, 0);
     this.buildEnvironment();
 
     this.input = new InputManager(canvas);
@@ -1356,6 +1366,7 @@ export class GameWorld {
       this.buildCaveEnvironment();
       return;
     }
+    this.createStormfallHorizonLayer();
     if (this.isForestDungeon) {
       this.buildForestEnvironment();
       return;
@@ -1393,6 +1404,39 @@ export class GameWorld {
     this.createTrees();
     this.createBuildings();
     if (this.options.step === "step5") this.createRuinsVisualPass();
+  }
+
+  /** Stormfall Visual Layer: the playable world always keeps a physical horizon, teal storm pressure, and distant warm landforms behind the TPS action. */
+  private createStormfallHorizonLayer() {
+    const horizon = new Layer("stormfall-horizon-atlas", HORIZON_ATLAS_URL, this.scene, true);
+    horizon.color = this.isForestDungeon ? new Color4(0.68, 0.86, 0.76, 0.42) : new Color4(0.72, 0.84, 1, 0.48);
+    horizon.isBackground = true;
+  }
+
+  private signalMaterial(kind: StormfallSignal) {
+    const cached = this.signalMaterials.get(kind);
+    if (cached) return cached;
+    const url = kind === "supply" ? SUPPLY_SIGIL_URL : kind === "navigation" ? NAVIGATION_SIGIL_URL : DANGER_SIGIL_URL;
+    const material = new StandardMaterial(`stormfall-${kind}-sigil-material`, this.scene);
+    const texture = new Texture(url, this.scene, true, false);
+    texture.anisotropicFilteringLevel = this.options.graphicsQuality === "pretty" ? 8 : 3;
+    material.diffuseTexture = texture;
+    material.emissiveTexture = texture;
+    material.specularColor = Color3.Black();
+    material.backFaceCulling = false;
+    material.disableLighting = true;
+    this.signalMaterials.set(kind, material);
+    return material;
+  }
+
+  private attachSignalPanel(root: TransformNode, id: string, kind: StormfallSignal, y: number, scale = 1) {
+    const panel = MeshBuilder.CreatePlane(`${id}-${kind}-panel`, { width: 0.92 * scale, height: 0.92 * scale }, this.scene);
+    panel.parent = root;
+    panel.position.set(0, y, 0.34 * scale);
+    panel.billboardMode = Mesh.BILLBOARDMODE_Y;
+    panel.material = this.signalMaterial(kind);
+    panel.isPickable = false;
+    return panel;
   }
 
   private createRuinsVisualPass() {
@@ -1442,6 +1486,8 @@ export class GameWorld {
       step.material = stoneMat;
     });
     this.createWorldSignal("ruins-forward-signal", new Vector3(-4.7, 0, 21), stoneMat, new Color3(0.075, 0.85, 0.77));
+    this.createStormfallGateway("ruins-entry-gateway", new Vector3(0, 0, 23), stoneMat, AMBER);
+    this.createStormfallGateway("ruins-depth-gateway", new Vector3(0, 0, -39), stoneMat, TEAL);
     this.createWideRuinsExplorationCampus(stoneMat, mossMat, flameMat);
   }
 
@@ -1519,14 +1565,46 @@ export class GameWorld {
     ring.position.y = 0.08;
     ring.rotation.x = Math.PI / 2;
     ring.material = beaconMat;
+    this.attachSignalPanel(root, id, "navigation", 2.55, 1.15);
+  }
+
+  /** A non-blocking, high-silhouette gate keeps the intended route readable without introducing a collision risk. */
+  private createStormfallGateway(id: string, position: Vector3, structureMaterial: StandardMaterial, accent: Color3) {
+    const root = new TransformNode(id, this.scene);
+    root.position.copyFrom(position);
+    const accentMaterial = new StandardMaterial(`${id}-accent`, this.scene);
+    accentMaterial.diffuseColor = accent;
+    accentMaterial.emissiveColor = accent.scale(0.52);
+    accentMaterial.disableLighting = true;
+    [-1, 1].forEach((side) => {
+      const pillar = MeshBuilder.CreateCylinder(`${id}-pillar-${side}`, { height: 5.9, diameterTop: 0.32, diameterBottom: 0.72, tessellation: 7 }, this.scene);
+      pillar.parent = root;
+      pillar.position.set(side * 3.15, 2.95, 0);
+      pillar.rotation.z = side * -0.055;
+      pillar.material = structureMaterial;
+      const rail = MeshBuilder.CreateCylinder(`${id}-rail-${side}`, { height: 3.9, diameter: 0.07, tessellation: 6 }, this.scene);
+      rail.parent = root;
+      rail.position.set(side * 2.58, 3.08, 0.18);
+      rail.material = accentMaterial;
+    });
+    const lintel = MeshBuilder.CreateBox(`${id}-lintel`, { width: 7.1, height: 0.46, depth: 0.58 }, this.scene);
+    lintel.parent = root;
+    lintel.position.y = 5.58;
+    lintel.material = structureMaterial;
+    const arch = MeshBuilder.CreateTorus(`${id}-rift-arch`, { diameter: 4.6, thickness: 0.075, tessellation: 32 }, this.scene);
+    arch.parent = root;
+    arch.position.y = 3.2;
+    arch.rotation.y = Math.PI / 2;
+    arch.material = accentMaterial;
+    this.attachSignalPanel(root, id, "navigation", 3.1, 0.86);
   }
 
   private buildCaveEnvironment() {
     const ground = MeshBuilder.CreateGround("cave-ground", { width: 28, height: 154, subdivisions: 20 }, this.scene);
     ground.material = this.terrainMaterial;
     const basaltMat = new StandardMaterial("cave-basalt-mat", this.scene);
-    basaltMat.diffuseColor = new Color3(0.13, 0.1, 0.19);
-    basaltMat.emissiveColor = new Color3(0.012, 0.008, 0.028);
+    basaltMat.diffuseColor = new Color3(0.22, 0.16, 0.3);
+    basaltMat.emissiveColor = new Color3(0.045, 0.03, 0.105);
     basaltMat.specularColor = Color3.Black();
     const crystalMat = new StandardMaterial("cave-crystal-mat", this.scene);
     crystalMat.diffuseColor = new Color3(0.04, 0.5, 0.6);
@@ -1570,8 +1648,8 @@ export class GameWorld {
     if (this.options.graphicsQuality !== "light") {
       const playerLight = new PointLight("cave-player-light", new Vector3(0, 2.8, 34), this.scene);
       playerLight.diffuse = new Color3(0.18, 0.78, 0.9);
-      playerLight.intensity = this.options.graphicsQuality === "pretty" ? 2.65 : 2.1;
-      playerLight.range = this.options.graphicsQuality === "pretty" ? 20 : 16;
+      playerLight.intensity = this.options.graphicsQuality === "pretty" ? 4.4 : 3.5;
+      playerLight.range = this.options.graphicsQuality === "pretty" ? 24 : 20;
       this.scene.onBeforeRenderObservable.add(() => playerLight.position.copyFrom(this.player.root.position.add(new Vector3(0, 2.8, 0))));
     }
     [[-8.5, 21], [8.5, -52]].forEach(([x, z], index) => {
@@ -1595,6 +1673,7 @@ export class GameWorld {
       beacon.material = beaconMat;
     });
     this.createWorldSignal("cave-forward-signal", new Vector3(3.8, 0, 23), basaltMat, TEAL);
+    this.createStormfallGateway("cave-deep-gateway", new Vector3(0, 0, -37), basaltMat, new Color3(0.13, 0.73, 0.86));
   }
 
   private createCaveAreaOne() {
@@ -1620,6 +1699,10 @@ export class GameWorld {
     const material = new StandardMaterial(`cave-floor-trap-mat-${index}`, this.scene);
     material.diffuseColor = new Color3(0.18, 0.05, 0.06);
     material.emissiveColor = new Color3(0.12, 0.01, 0.015);
+    const dangerTexture = new Texture(DANGER_SIGIL_URL, this.scene, true, false);
+    dangerTexture.uScale = 1.8;
+    dangerTexture.vScale = 1.8;
+    material.diffuseTexture = dangerTexture;
     mesh.material = material;
     this.caveFloorTraps.push({ mesh, position: position.clone(), warning: 0, cooldown: 1.6, active: false });
   }
@@ -1808,6 +1891,8 @@ export class GameWorld {
       ring.material = ringMat;
     });
     this.createWorldSignal("forest-forward-signal", new Vector3(-3.8, 0, 19), pylonMat, TEAL);
+    this.createStormfallGateway("forest-fork-gateway", new Vector3(0, 0, 5), pylonMat, new Color3(0.2, 0.84, 0.48));
+    this.createStormfallGateway("forest-boss-gateway", new Vector3(0, 0, -66), pylonMat, AMBER);
     this.createForestDirectionSign(new Vector3(-4.8, 0, 2.2), "← 安全な道\n回復があるよ");
     this.createForestDirectionSign(new Vector3(4.8, 0, 2.2), "危険な道 →\n宝箱があるかも！");
   }
@@ -1992,6 +2077,7 @@ export class GameWorld {
   }
 
   private createTerrainTexture() {
+    if (this.isForestDungeon || this.isCaveDungeon) return this.createReadableTerrainTexture();
     const generatedTextureUrl = this.isCaveDungeon
       ? "/manus-storage/stormfall-cave-ground-texture_32b8bd63.png"
       : this.isForestDungeon
@@ -2034,6 +2120,41 @@ export class GameWorld {
     texture.update(false);
     return texture;
     */
+  }
+
+  /** Keeps critical walkable surfaces legible on both mobile and screenshot renderers without image-generation artifacts. */
+  private createReadableTerrainTexture() {
+    const isCave = this.isCaveDungeon;
+    const texture = new DynamicTexture(`${isCave ? "cave" : "forest"}-readable-ground`, { width: 512, height: 512 }, this.scene, false);
+    const context = texture.getContext();
+    context.fillStyle = isCave ? "#4c3a72" : "#244d22";
+    context.fillRect(0, 0, 512, 512);
+    for (let index = 0; index < 78; index += 1) {
+      const x = (index * 83) % 512;
+      const y = (index * 149) % 512;
+      const size = 6 + ((index * 19) % 22);
+      context.fillStyle = isCave
+        ? (index % 5 === 0 ? "rgba(35, 176, 188, .26)" : index % 3 === 0 ? "rgba(107, 82, 142, .3)" : "rgba(10, 7, 20, .28)")
+        : (index % 4 === 0 ? "rgba(122, 169, 61, .24)" : index % 3 === 0 ? "rgba(13, 47, 20, .26)" : "rgba(72, 99, 31, .26)");
+      context.beginPath();
+      context.arc(x, y, size, 0, Math.PI * 2);
+      context.fill();
+    }
+    context.lineWidth = isCave ? 2.2 : 1.2;
+    for (let index = 0; index < 34; index += 1) {
+      const x = (index * 71) % 512;
+      const y = (index * 137) % 512;
+      context.strokeStyle = isCave ? (index % 3 === 0 ? "rgba(74, 237, 226, .3)" : "rgba(14, 9, 27, .45)") : "rgba(153, 208, 76, .2)";
+      context.beginPath();
+      context.moveTo(x, y);
+      context.lineTo(x + 10 + ((index * 17) % 38), y + ((index * 29) % 28) - 14);
+      context.stroke();
+    }
+    texture.uScale = isCave ? 6.2 : 5.4;
+    texture.vScale = isCave ? 18 : 13;
+    texture.anisotropicFilteringLevel = this.options.graphicsQuality === "pretty" ? 8 : 3;
+    texture.update(false);
+    return texture;
   }
 
   private createTerrainScars() {
@@ -2165,12 +2286,35 @@ export class GameWorld {
       barrel.rotation.z = Math.PI / 2;
       barrel.position.set(0.36, 0.38, 0);
       barrel.material = material;
+    } else if (type === "med") {
+      const crossH = MeshBuilder.CreateBox(`dungeon-pickup-med-h-${this.pickups.length}`, { width: 0.52, height: 0.12, depth: 0.08 }, this.scene);
+      crossH.parent = root;
+      crossH.position.set(0, 0.45, 0.33);
+      crossH.material = material;
+      const crossV = MeshBuilder.CreateBox(`dungeon-pickup-med-v-${this.pickups.length}`, { width: 0.12, height: 0.52, depth: 0.08 }, this.scene);
+      crossV.parent = root;
+      crossV.position.set(0, 0.45, 0.33);
+      crossV.material = material;
+    } else if (type === "ammo") {
+      [-0.16, 0, 0.16].forEach((offset) => {
+        const cell = MeshBuilder.CreateCylinder(`dungeon-pickup-cell-${this.pickups.length}-${offset}`, { height: 0.48, diameter: 0.13, tessellation: 6 }, this.scene);
+        cell.parent = root;
+        cell.position.set(offset, 0.48, 0);
+        cell.material = material;
+      });
+    } else if (type === "chest" || type === "secret") {
+      const lid = MeshBuilder.CreateBox(`dungeon-pickup-lid-${this.pickups.length}`, { width: type === "chest" ? 1.48 : 0.64, height: 0.16, depth: type === "chest" ? 0.92 : 0.58 }, this.scene);
+      lid.parent = root;
+      lid.position.y = type === "chest" ? 0.98 : 0.57;
+      lid.material = material;
     }
     const ring = MeshBuilder.CreateTorus(`dungeon-pickup-ring-${this.pickups.length}`, { diameter: type === "chest" ? 2.1 : 1.25, thickness: 0.035, tessellation: 20 }, this.scene);
     ring.parent = root;
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.04;
     ring.material = material;
+    const signalKind: StormfallSignal = type === "rune" ? "navigation" : "supply";
+    this.attachSignalPanel(root, `dungeon-pickup-${this.pickups.length}`, signalKind, type === "chest" ? 1.56 : 1.02, type === "chest" ? 1.12 : 0.78);
     this.pickups.push({ root, type, label, amount, ammoType, weaponId, collected: false });
   }
 

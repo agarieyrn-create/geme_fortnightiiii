@@ -41,6 +41,8 @@ export default function GameCanvas() {
   const dungeonQuery = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("dungeon") : null;
   const selectedDungeon = (dungeonQuery === "forest" || dungeonQuery === "cave" ? dungeonQuery : "ruins") as DungeonId;
   const dungeonName = selectedDungeon === "cave" ? "くらやみの洞窟" : selectedDungeon === "forest" ? "まよいの森" : "はじまりの遺跡";
+  const dungeonSignal = selectedDungeon === "cave" ? "DEPTH-12" : selectedDungeon === "forest" ? "GROVE-09" : "RIFT-07";
+  const dungeonTelemetry = selectedDungeon === "cave" ? "明かりを追え" : selectedDungeon === "forest" ? "分岐を見失うな" : "遺跡信号を確認";
   const [started, setStarted] = useState(isDemo || quickStart);
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [progression, setProgression] = useState<ProgressionData>(() => loadProgression());
@@ -93,11 +95,14 @@ export default function GameCanvas() {
     if (!canvas || startedRef.current) return;
     startedRef.current = true;
 
+    const compactRenderer = window.matchMedia("(max-width: 767px), (pointer: coarse)").matches;
     const engine = new Engine(canvas, true, {
-      preserveDrawingBuffer: true,
+      preserveDrawingBuffer: false,
       stencil: true,
-      adaptToDeviceRatio: true,
+      adaptToDeviceRatio: false,
     });
+    // Protect input responsiveness on phones while keeping the cinematic HUD sharp.
+    engine.setHardwareScalingLevel(compactRenderer ? Math.min(1.55, window.devicePixelRatio || 1) : 1);
     let disposed = false;
 
     void createGameScene(engine, canvas, {
@@ -288,7 +293,7 @@ export default function GameCanvas() {
           <div className="storm-readout">
               <span className="eyebrow">たんけんモード</span>
               <strong id="storm-timer">{dungeonName}</strong>
-              <small className="rig-status">3Dプレイヤー</small>
+              <small className="rig-status">操作リンク 接続</small>
 
           </div>
           <div className="remaining-readout">
@@ -305,9 +310,9 @@ export default function GameCanvas() {
             <div id="mini-safe" className="mini-safe" />
             <i id="mini-player" className="mini-player" />
             <span className="north-mark">N</span>
-            <span className="map-label">RIFT-07</span>
+            <span className="map-label">{dungeonSignal}</span>
           </div>
-          <div className="threat-card"><span>エリア</span><b id="zone-status">安全</b></div>
+          <div className="threat-card"><span>危険度</span><b id="zone-status">安全</b></div>
         </aside>
 
         <section className="dungeon-objective" aria-live="polite"><span>いまの目標</span><strong id="dungeon-objective">敵を3体たおそう！</strong></section>
@@ -319,20 +324,20 @@ export default function GameCanvas() {
         </section>
 
         <section className="combat-panel" aria-label="武器状態">
-          <div className="weapon-tag"><span className="weapon-dot" /><span id="weapon-name">武器なし</span> <i id="aim-status">通常</i></div>
-          <div className="ammo-value"><strong id="ammo-value">0</strong><span>/ <i id="reserve-value">0</i></span></div>
+          <div className="weapon-tag"><span className="weapon-dot" /><span className="weapon-label">メイン武器</span><span id="weapon-name">武器なし</span> <i id="aim-status">通常</i></div>
+          <div className="ammo-value"><em>だんそう</em><strong id="ammo-value">0</strong><span>/ <i id="reserve-value">0</i></span></div>
           <button className="hud-reload" type="button" data-touch-action="reload">リロード</button>
           <div className="weapon-slots" aria-label="武器スロット">
-            <button id="slot-1" className="selected" type="button" data-touch-action="slot1">なし</button>
-            <button id="slot-2" type="button" data-touch-action="slot2">なし</button>
-            <button id="slot-3" type="button" data-touch-action="slot3">なし</button>
+            <button id="slot-1" className="selected" type="button" data-touch-action="slot1" aria-label="武器スロット1">1</button>
+            <button id="slot-2" type="button" data-touch-action="slot2" aria-label="武器スロット2">2</button>
+            <button id="slot-3" type="button" data-touch-action="slot3" aria-label="武器スロット3">3</button>
           </div>
           <button id="medkit-value" className="medkit-value" type="button" data-touch-action="medkit">回復 ×0</button>
         </section>
 
         <section className="signal-card" aria-label="近くの補給物資">
           <img src={BEACON_URL} alt="補給ビーコン" />
-          <div><span>FIELD SIGNAL</span><strong id="pickup-status">補給物資を探索</strong></div>
+          <div><span>補給信号 // {dungeonTelemetry}</span><strong id="pickup-status">補給物資を探索</strong></div>
         </section>
 
         <div className="crosshair" aria-hidden="true"><i /><b /></div>
