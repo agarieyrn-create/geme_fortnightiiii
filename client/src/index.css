@@ -354,6 +354,11 @@ button { font: inherit; }
 .hub-stats { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .strength-readout { color: #a9c5c8; font-weight: 700; }
 .strength-readout strong { color: #ffe07d; font-size: 1.18em; }
+.power-up-flash { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin: 10px 0 2px; padding: 8px 10px; border-left: 3px solid #13d9c4; background: linear-gradient(90deg, rgba(19,217,196,.24), rgba(19,217,196,.04)); color: #d9fffa; font-family: "Chakra Petch", "Noto Sans JP", sans-serif; box-shadow: 0 0 20px rgba(19,217,196,.18); animation: power-up-flash 1.8s cubic-bezier(.23,1,.32,1) both; }
+.power-up-flash span { color: #a8f8ed; font: 800 10px "Noto Sans JP", sans-serif; letter-spacing: .05em; }
+.power-up-flash strong { display: flex; justify-content: center; align-items: baseline; gap: 5px; color: #fff4b8; font-size: 21px; letter-spacing: -.04em; }
+.power-up-flash strong b:last-child { color: #72ffe9; }.power-up-flash i { color: #13d9c4; font-style: normal; }.power-up-flash em { color: #fff0a5; font-size: 17px; font-style: normal; font-weight: 800; text-shadow: 0 0 11px rgba(255,211,106,.72); }
+@keyframes power-up-flash { 0% { opacity: 0; transform: translateY(10px) scale(.94); } 16% { opacity: 1; transform: translateY(0) scale(1.03); } 35% { transform: translateY(0) scale(1); } 78% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-5px) scale(.98); } }
 .power-compare { padding: 8px 12px; border-left: 3px solid #ffd36a; background: rgba(255,211,106,.12); color: #ffe9a4; font-weight: 800; }
 .dungeon-card span + span { color: #ffd36a; }
 .locked-dungeons span { display: grid; gap: 5px; }

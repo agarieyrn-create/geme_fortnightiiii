@@ -28,6 +28,7 @@ const RIVALS = [
 
 type AvatarId = (typeof AVATARS)[number]["id"];
 type TutorialHint = { text: string; target: "move" | "look" | "aim" | "fire" | "pickup" | "jump" };
+type PowerPulse = { before: number; after: number; gained: number; token: number };
 
 export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,6 +47,8 @@ export default function GameCanvas() {
   const progressionRef = useRef(progression);
   const [hubView, setHubView] = useState<"home" | "dungeons" | "upgrade" | "loadout" | "settings">("home");
   const [hubNotice, setHubNotice] = useState("");
+  const [powerPulse, setPowerPulse] = useState<PowerPulse | null>(null);
+  const powerPulseTimerRef = useRef<number | null>(null);
   const [tutorial, setTutorial] = useState<TutorialHint | null>(null);
   const tutorialTimerRef = useRef<number | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
@@ -167,12 +170,23 @@ export default function GameCanvas() {
   }, [started]);
 
   const changeUpgrade = (key: "hpLevel" | "attackLevel" | "reloadLevel") => {
+    const before = getStrength(progression);
     const result = applyUpgrade(progression, key);
     progressionRef.current = result.data;
     setProgression(result.data);
     setHubNotice(result.message);
+    if (result.ok) {
+      const after = getStrength(result.data);
+      if (powerPulseTimerRef.current !== null) window.clearTimeout(powerPulseTimerRef.current);
+      setPowerPulse({ before, after, gained: after - before, token: Date.now() });
+      powerPulseTimerRef.current = window.setTimeout(() => setPowerPulse(null), 1800);
+    }
     window.setTimeout(() => setHubNotice(""), 1500);
   };
+
+  useEffect(() => () => {
+    if (powerPulseTimerRef.current !== null) window.clearTimeout(powerPulseTimerRef.current);
+  }, []);
 
   const updateVolume = (key: "sfxVolume" | "bgmVolume", value: number) => {
     const next = { ...progression, [key]: value };
@@ -338,6 +352,7 @@ export default function GameCanvas() {
             <p className="kicker"><span className="stormfall-wordmark">STORMFALL</span><span className="stormfall-system-label">// 前線作戦端末</span></p>
             <h1>{hubView === "home" ? "次の降下をえらべ" : hubView === "dungeons" ? "降下先をえらべ" : hubView === "upgrade" ? "戦力を調整" : hubView === "loadout" ? "装備を確認" : "前線端末設定"}</h1>
             <div className="hub-stats"><div className="coin-readout">補給コイン　<strong>🪙 {progression.coins}</strong></div><div className="strength-readout">作戦力　<strong>{strength}</strong></div></div>
+            {powerPulse && <div className="power-up-flash" key={powerPulse.token} role="status" aria-live="polite"><span>作戦力アップ！</span><strong><b>{powerPulse.before}</b><i>→</i><b>{powerPulse.after}</b></strong><em>+{powerPulse.gained}</em></div>}
             {hubNotice && <p className="hub-notice">{hubNotice}</p>}
             {hubView === "home" && <>
               <p className="launch-copy">外縁信号を確認。嵐の向こうに降下地点がある。</p>
