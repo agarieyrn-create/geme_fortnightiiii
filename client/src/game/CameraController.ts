@@ -55,6 +55,14 @@ export class CameraController {
     return this.camera.getForwardRay(300).direction.normalize();
   }
 
+  syncAimRay(targetPosition: Vector3, aiming: boolean, crouching: boolean) {
+    const forward = this.forward();
+    const target = targetPosition.add(new Vector3(0, crouching ? 1.0 : 1.42, 0));
+    const pitchLook = (this.pitch - this.recoil) * (aiming ? 4.6 : 4.2);
+    this.camera.setTarget(target.add(forward.scale(aiming ? 3.4 : 8.5)).add(new Vector3(0, pitchLook, 0)));
+    return this.aimDirection();
+  }
+
   addRecoil(amount = 0.014) {
     this.recoil = Math.min(0.08, this.recoil + amount);
   }

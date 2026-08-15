@@ -362,9 +362,10 @@ button { font: inherit; }
 @media (max-width: 767px), (pointer: coarse) { .tutorial-toast { top: 44%; font-size: 14px; }.playtest-debug { top: 78px; left: 12px; transform: scale(.9); transform-origin: top left; } }
 @media (min-width: 768px) { .howto-mobile { display: none; } }
 @media (max-width: 767px) { .pause-button { top: 196px; right: 10px; padding: 6px 7px; font-size: 8px; }.pause-button kbd { display: none; }.pause-card { padding: 18px; }.pause-card h2 { font-size: 25px; }.pause-actions { grid-template-columns: 1fr; }.howto-pc { display: none; }.howto-mobile { font-size: 11px; }.difficulty-picker > div, .aim-assist-settings > div { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.hub-screen { position: relative; display: block; padding: 0; background-position: center; }
+.hub-screen { position: relative; display: block; padding: 0; overflow: auto; background-position: center; }
 .hub-screen::after { position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse at 72% 54%, transparent 0 32%, rgba(0,7,20,.28) 62%, rgba(0,6,16,.88) 100%); content: ""; pointer-events: none; }
-.hub-card { position: absolute; top: clamp(20px, 5vh, 62px); left: clamp(16px, 5vw, 72px); width: min(350px, 38vw); min-height: 0; padding: 19px 22px 21px; border-color: rgba(19,217,196,.45); background: linear-gradient(90deg, rgba(2,13,27,.9), rgba(2,13,27,.45)); box-shadow: inset 2px 0 #13d9c4, 0 18px 42px rgba(0,0,0,.24); backdrop-filter: blur(4px); }
+.hub-card { position: absolute; top: clamp(20px, 5vh, 62px); left: clamp(16px, 5vw, 72px); width: min(350px, 38vw); max-height: calc(100dvh - clamp(42px, 10vh, 104px)); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 19px 22px 21px; border-color: rgba(19,217,196,.45); background: linear-gradient(90deg, rgba(2,13,27,.9), rgba(2,13,27,.45)); box-shadow: inset 2px 0 #13d9c4, 0 18px 42px rgba(0,0,0,.24); backdrop-filter: blur(4px); scrollbar-width: thin; scrollbar-color: rgba(19,217,196,.7) rgba(2,13,27,.45); }
+.hub-card::-webkit-scrollbar { width: 6px; }.hub-card::-webkit-scrollbar-thumb { border-radius: 5px; background: rgba(19,217,196,.66); }
 .hub-card .launch-logo { width: 54px; height: 54px; margin-bottom: 6px; }
 .hub-card .kicker { margin-bottom: 7px; font-size: 8px; }
 .hub-card h1 { margin: 7px 0 12px; font-family: "Chakra Petch", "Noto Sans JP", sans-serif; font-size: clamp(25px, 2.7vw, 38px); letter-spacing: .05em; text-transform: uppercase; }
@@ -384,4 +385,12 @@ button { font: inherit; }
   .hub-stats { gap: 5px 14px; }
   .upgrade-card { align-items: stretch; }
   .upgrade-card button { min-width: 86px; }
+}
+@media (min-width: 768px) and (max-height: 760px) {
+  .hub-card { top: 14px; max-height: calc(100dvh - 28px); padding: 13px 16px 15px; }
+  .hub-card .launch-logo { width: 42px; height: 42px; }
+  .hub-card h1 { margin: 4px 0 8px; font-size: 24px; }
+  .hub-card .launch-copy { margin: 8px 0 10px; font-size: 11px; }
+  .hub-menu { margin-top: 9px; }.hub-menu button { min-height: 36px; }
+  .upgrade-card { gap: 8px; padding: 7px; }.upgrade-card button { min-width: 76px; min-height: 33px; }
 }

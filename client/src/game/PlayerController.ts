@@ -67,7 +67,9 @@ export class PlayerController {
 
     this.weapon.update(delta);
     if (snapshot.reloadPressed) this.weapon.reload();
-    const aimDirection = this.camera.aimDirection();
+    // Align the camera target before taking the firing ray. This keeps a fast mouse
+    // sweep and the centre crosshair on the same frame as the hit test.
+    const aimDirection = this.camera.syncAimRay(this.rig.root.position, this.aiming, this.crouching);
     const muzzle = this.rig.root.position.add(new Vector3(0, this.crouching ? 0.94 : 1.32, 0)).add(aimDirection.scale(0.8));
     const hasWeapon = this.weapon.definition() !== null;
     if (snapshot.firing && hasWeapon) this.weapon.fire({ origin: muzzle, direction: aimDirection, damage: 25 }, (request) => onFire(request.origin, request.direction, request.damage));
